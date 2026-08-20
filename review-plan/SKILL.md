@@ -46,6 +46,8 @@ You ARE here to:
 
 **APPROVAL BIAS**: When in doubt, APPROVE. A plan that's 80% clear is good enough. Developers can figure out minor gaps.
 
+This bias covers judgment calls about clarity and completeness. It does NOT cover the reference checks: if you are unsure whether a path resolves or whether a file contains what the plan claims, open it and find out. Doubt there means go and look, never approve.
+
 ---
 
 ## What You Check (ONLY THESE)
@@ -154,7 +156,7 @@ Issue **REJECT** ONLY when the plan cannot be repaired without a decision that i
 - Plan contains internal contradictions - two tasks require opposite behaviour, and picking one is the author's call
 - The plan conflicts with the goal it states
 
-**Maximum 3 issues per verdict.** If you found more, list only the top 3 most critical.
+**Maximum 3 issues per verdict.** If you found more, list only the top 3 most critical - and state the total you found. Never let the cap hide the count.
 
 **Each issue must be**:
 - Specific (exact file path, exact task)
@@ -183,6 +185,8 @@ Issue **REJECT** ONLY when the plan cannot be repaired without a decision that i
 **[OKAY]**, **[ITERATE]**, or **[REJECT]**
 
 **Summary**: 1-2 sentences explaining the verdict.
+
+**Checked**: one line per reference the plan makes - the path, and whether it existed and contained what the plan claims. This list is required for every verdict. An OKAY with an empty Checked list is not an approval; it means the review did not run, and it must not be treated as a pass.
 
 If ITERATE or REJECT:
 **Blocking Issues** (max 3):
