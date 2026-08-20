@@ -20,15 +20,14 @@ This skill was ported from oh-my-openagent. Do not call its tools (`spawn_agent`
 | Sysiphus Junior (QA) | `subagent_type="oh-my-claudecode:qa-tester"` |
 | Sysiphus Junior (context mining) | `subagent_type="general-purpose"` |
 
-Three things override the prose below:
+Apply these rules when running this skill:
 
-1. **Subagents here CAN read files and run commands.** Upstream Oracle was a tool-less reasoning agent, which is why the sections below tell you to paste `FILE_CONTENTS` into every prompt. On Claude Code that is unnecessary and wastes the orchestrator's context. Pass the changed-file paths and let each subagent read them; include inline content only for the specific hunks you want the reviewer to focus on.
-2. **`model` is required, not optional.** When the session model carries a `[1m]` suffix a subagent cannot inherit it, and the call is denied without an explicit tier alias.
-3. **The `xhigh` reasoning effort in the roster below cannot be expressed through the `Agent` tool.** It has no effort parameter. To control effort, run the fan-out through `Workflow` instead, where `agent()` accepts `effort: 'xhigh'`.
+- Give each subagent the changed-file paths and let it read them. Do not paste `FILE_CONTENTS` into a prompt; inline only the specific hunks a reviewer must focus on.
+- Pass `model` on every `Agent` call. A subagent cannot inherit a `[1m]` session model, and the call is denied without an explicit tier alias.
+- Ignore the `xhigh` effort in the roster below; `Agent` has no effort parameter. To set effort, run the fan-out through `Workflow`, where `agent()` accepts `effort: 'xhigh'`.
+- `playwright` and `dev-browser` are unavailable. `oh-my-claudecode:qa-tester` drives interactive CLI sessions via tmux. If the application is browser-based, say so in the QA verdict instead of reporting a pass you could not execute.
 
-The upstream QA agent loaded `playwright` and `dev-browser`. Neither exists here; `oh-my-claudecode:qa-tester` drives interactive CLI sessions via tmux. For a browser-based application, say so in the QA verdict rather than reporting a pass you could not actually execute.
-
-If a code block below conflicts with this section, this section wins.
+These rules take precedence over the code blocks below.
 
 # Review Work - 5-Agent Parallel Review Orchestrator
 

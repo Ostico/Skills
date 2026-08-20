@@ -12,7 +12,7 @@ This skill uses Claude Code native tools. Do not call OpenCode or oh-my-openagen
 | Launch the Momus reviewer | `Agent(subagent_type="claude", model="opus", prompt="<the prompt below>")` |
 | Collect the verdict | Automatic completion notification — do not poll |
 
-`model` is required, not optional: when the session model carries a `[1m]` suffix a subagent cannot inherit it, and the call is denied without an explicit tier alias. If a code block below conflicts with this section, this section wins.
+Pass `model` on the `Agent` call. A subagent cannot inherit a `[1m]` session model, and the call is denied without an explicit tier alias.
 
 Launch a specialized sub-agent, its name is Momus.
 
