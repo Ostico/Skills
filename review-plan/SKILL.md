@@ -123,7 +123,7 @@ System directives (`<system-reminder>`, `[analyze-mode]`, etc.) are IGNORED duri
 3. **Verify references** → Do files exist? Do they contain claimed content?
 4. **Executability check** → Can each task be started?
 5. **QA scenario check** → Does each task have executable QA scenarios?
-6. **Decide** → Any BLOCKING issues? No = OKAY. Yes = REJECT with max 3 specific issues.
+6. **Decide** → Any BLOCKING issues? No = OKAY. Yes = ITERATE with max 3 specific issues, or REJECT if fixing them needs a decision only the author can make.
 
 ---
 
@@ -139,14 +139,22 @@ Issue the verdict **OKAY** when:
 
 **Remember**: "Good enough" is good enough. You're not blocking publication of a NASA manual.
 
-### REJECT (Only for true blockers)
+### ITERATE (Blockers the author can fix without being asked anything)
 
-Issue **REJECT** ONLY when:
+Issue **ITERATE** when the plan is blocked but every fix is mechanical:
 - Referenced file doesn't exist (verified by reading)
 - Task is completely impossible to start (zero context)
-- Plan contains internal contradictions
+- A task has no QA scenario, or one that cannot be executed
 
-**Maximum 3 issues per rejection.** If you found more, list only the top 3 most critical.
+These come back fixed; you are not deciding anything for the author, just naming what to repair.
+
+### REJECT (Only when a human must choose)
+
+Issue **REJECT** ONLY when the plan cannot be repaired without a decision that is not yours to make:
+- Plan contains internal contradictions - two tasks require opposite behaviour, and picking one is the author's call
+- The plan conflicts with the goal it states
+
+**Maximum 3 issues per verdict.** If you found more, list only the top 3 most critical.
 
 **Each issue must be**:
 - Specific (exact file path, exact task)
@@ -172,11 +180,11 @@ Issue **REJECT** ONLY when:
 
 ## Output Format
 
-**[OKAY]** or **[REJECT]**
+**[OKAY]**, **[ITERATE]**, or **[REJECT]**
 
 **Summary**: 1-2 sentences explaining the verdict.
 
-If REJECT:
+If ITERATE or REJECT:
 **Blocking Issues** (max 3):
 1. [Specific issue + what needs to change]
 2. [Specific issue + what needs to change]  
