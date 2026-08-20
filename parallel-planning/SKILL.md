@@ -1,5 +1,5 @@
 ---
-name: parallel-plan
+name: parallel-planning
 description: "Strategic planning consultant that produces decision-complete work plans through Socratic interview, codebase exploration, Critic gap analysis, and optional Momus high-accuracy review. MUST USE when the task has 5+ steps, scope is ambiguous, multiple modules are involved, or the user asks for a plan. Triggers: parallel-plan, plan this, create a work plan, interview me, start planning, plan mode, help me plan this, break this down."
 ---
 
@@ -9,12 +9,12 @@ This skill uses Claude Code native tools. Do not call OpenCode or Codex tools (`
 
 | Action | Claude Code Tool |
 | --- | --- |
-| Read-only exploration subagent | `Agent(subagent_type="Explore", prompt="...")` |
-| Gap analysis (Critic) | `Agent(subagent_type="oh-my-claudecode:critic", prompt="...")` |
-| Plan review (Momus) | `Agent(subagent_type="claude", prompt="<embedded Momus instructions>")` |
-| Implementation subagent | `Agent(subagent_type="oh-my-claudecode:executor", prompt="...")` |
+| Read-only exploration subagent | `Agent(subagent_type="Explore", model="sonnet", prompt="...")` |
+| Gap analysis (Critic) | `Agent(subagent_type="oh-my-claudecode:critic", model="opus", prompt="...")` |
+| Plan review (Momus) | `Agent(subagent_type="claude", model="opus", prompt="<embedded Momus instructions>")` |
+| Implementation subagent | `Agent(subagent_type="oh-my-claudecode:executor", model="sonnet", prompt="...")` |
 | Parallel wave execution | `Workflow(script="...")` with `phase()` + `parallel()` |
-| Background agent | `Agent(..., run_in_background=true)` — auto-notified on completion |
+| Background agent | `Agent(...)` — always backgrounded and auto-notified on completion; there is no `run_in_background` parameter |
 | Agent communication | `SendMessage(to="agent-name")` for existing agents |
 | File-mutating parallel agents | `Agent(..., isolation="worktree")` |
 
@@ -101,7 +101,7 @@ Eliminate unknowns by discovering facts, not by asking the user.
 
 Before asking the user any question, perform at least one targeted exploration pass:
 
-- Spawn parallel read-only subagents via `Agent(subagent_type="Explore", prompt="...")` for internal codebase patterns, conventions, similar implementations, naming/registration patterns.
+- Spawn parallel read-only subagents via `Agent(subagent_type="Explore", model="sonnet", prompt="...")` for internal codebase patterns, conventions, similar implementations, naming/registration patterns.
 - Spawn subagent for test infrastructure assessment (framework config, representative test files, CI integration).
 - For external libraries: spawn subagent for official docs, API reference, recommended patterns, pitfalls.
 
@@ -186,7 +186,7 @@ ANY NO -> Ask the specific unclear question.
 Spawn a Critic agent to analyze the planning session for contradictions, ambiguity, missing constraints, and execution risks:
 
 ```
-Agent(subagent_type="oh-my-claudecode:critic", prompt="
+Agent(subagent_type="oh-my-claudecode:critic", model="opus", prompt="
   You are performing gap analysis on a planning session. This is NOT a full plan review — focus ONLY on:
   1. Contradictions between stated requirements
   2. Ambiguity that would force implementer judgment calls
@@ -265,7 +265,7 @@ Only activated when user selects "High Accuracy Review".
 Spawn a Momus reviewer agent with the embedded review prompt and plan file path:
 
 ```
-Agent(subagent_type="claude", prompt="
+Agent(subagent_type="claude", model="opus", prompt="
   <momus-instructions>
   You are Momus, a **practical** work plan reviewer. Your goal is simple: verify that the plan is **executable** and **references are valid**.
 
@@ -446,7 +446,7 @@ After plan is complete (direct or Momus-approved):
 
    **Sequential** (1 wave or all tasks depend on previous):
    Present summary: "Plan saved to `.omc/plans/{slug}.md`. Ready to execute sequentially."
-   On user approval → call: `Agent(subagent_type="oh-my-claudecode:executor", prompt="Execute plan: .omc/plans/{slug}.md")`
+   On user approval → call: `Agent(subagent_type="oh-my-claudecode:executor", model="sonnet", prompt="Execute plan: .omc/plans/{slug}.md")`
 
    **Parallel** (2+ independent waves with tasks that can run concurrently):
    Write Workflow script to `.omc/plans/{slug}-workflow.js` as a plan artifact.

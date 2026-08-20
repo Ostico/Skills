@@ -1,3 +1,35 @@
+---
+name: review-work
+description: "Review completed implementation work with 5 parallel specialists — goal verification, hands-on QA execution, code quality, security audit, and context mining. All 5 must pass; one failure fails the review. Use when the user says review this work, review my changes, is this done, check before merge, or after finishing a feature and before opening a PR."
+---
+
+## Claude Code Harness Tool Compatibility
+
+This skill was ported from oh-my-openagent. Do not call its tools (`spawn_agent`, `wait_agent`, `call_omo_agent`, `task`, `background_output`, `team_*`). Use the mappings below.
+
+| Upstream | Claude Code |
+| --- | --- |
+| `task(...)` | `Agent(...)` |
+| `background_output(task_id=...)` | Automatic task notification on completion — never poll |
+| `run_in_background=true` | No such parameter; subagents always run in the background |
+| `category="unspecified-high"` | `model="opus"` (or `"sonnet"`) — a tier alias, not a category |
+| `load_skills=[...]` | No such parameter; pick an agent type that already has the capability, or embed the instructions in the prompt |
+| Oracle (goal verification) | `subagent_type="oh-my-claudecode:verifier"` |
+| Oracle (code quality) | `subagent_type="oh-my-claudecode:code-reviewer"` |
+| Oracle (security) | `subagent_type="oh-my-claudecode:security-reviewer"` |
+| Sysiphus Junior (QA) | `subagent_type="oh-my-claudecode:qa-tester"` |
+| Sysiphus Junior (context mining) | `subagent_type="general-purpose"` |
+
+Three things override the prose below:
+
+1. **Subagents here CAN read files and run commands.** Upstream Oracle was a tool-less reasoning agent, which is why the sections below tell you to paste `FILE_CONTENTS` into every prompt. On Claude Code that is unnecessary and wastes the orchestrator's context. Pass the changed-file paths and let each subagent read them; include inline content only for the specific hunks you want the reviewer to focus on.
+2. **`model` is required, not optional.** When the session model carries a `[1m]` suffix a subagent cannot inherit it, and the call is denied without an explicit tier alias.
+3. **The `xhigh` reasoning effort in the roster below cannot be expressed through the `Agent` tool.** It has no effort parameter. To control effort, run the fan-out through `Workflow` instead, where `agent()` accepts `effort: 'xhigh'`.
+
+The upstream QA agent loaded `playwright` and `dev-browser`. Neither exists here; `oh-my-claudecode:qa-tester` drives interactive CLI sessions via tmux. For a browser-based application, say so in the QA verdict rather than reporting a pass you could not actually execute.
+
+If a code block below conflicts with this section, this section wins.
+
 # Review Work - 5-Agent Parallel Review Orchestrator
 
 Launch 5 specialized sub-agents in parallel to review completed implementation work from every angle. All 5 must pass for the review to pass. If even ONE fails, the review fails.
@@ -27,19 +59,19 @@ Before launching agents, collect these inputs. Extract from conversation history
 - **GOAL**: The original objective. What was the user trying to achieve? Pull from the initial request in this conversation.
 - **CONSTRAINTS**: Rules, requirements, or limitations. Tech stack restrictions, performance targets, API contracts, design patterns to follow, backward compatibility needs.
 - **BACKGROUND**: Why this work was needed. Business context, user stories, related systems, prior decisions that informed the approach.
-- **CHANGED_FILES**: Auto-collect via \`git diff --name-only HEAD~1\` or against the appropriate base (branch point, specific commit).
-- **DIFF**: Auto-collect via \`git diff HEAD~1\` or against the appropriate base.
+- **CHANGED_FILES**: Auto-collect via `git diff --name-only HEAD~1` or against the appropriate base (branch point, specific commit).
+- **DIFF**: Auto-collect via `git diff HEAD~1` or against the appropriate base.
 - **FILE_CONTENTS**: Read the full content of each changed file (not just the diff). Oracle agents cannot read files - they need full context in the prompt.
-- **RUN_COMMAND**: How to start/run the application. Check \`package.json\` scripts, \`Makefile\`, \`docker-compose.yml\`, or ask the user.
+- **RUN_COMMAND**: How to start/run the application. Check `package.json` scripts, `Makefile`, `docker-compose.yml`, or ask the user.
 
 </required_inputs>
 
 
-**NEVER CHECKOUT A PR BRANCH IN THE MAIN WORKTREE. ALWAYS CREATE A NEW GIT WORKTREE (\`git worktree add\`) AND WORK THERE. THIS PREVENTS CONTAMINATING THE USER'S WORKING DIRECTORY WITH UNRELATED BRANCH STATE.**
+**NEVER CHECKOUT A PR BRANCH IN THE MAIN WORKTREE. ALWAYS CREATE A NEW GIT WORKTREE (`git worktree add`) AND WORK THERE. THIS PREVENTS CONTAMINATING THE USER'S WORKING DIRECTORY WITH UNRELATED BRANCH STATE.**
 
 **Auto-collection sequence:**
 
-\`\`\`bash
+```bash
 # 1. Get changed files
 git diff --name-only HEAD~1  # or: git diff --name-only main...HEAD
 
@@ -50,7 +82,7 @@ git diff HEAD~1  # or: git diff main...HEAD
 # Check package.json -> "scripts.dev" or "scripts.start"
 # Check Makefile -> default target
 # Check docker-compose.yml -> services
-\`\`\`
+```
 
 For GOAL, CONSTRAINTS, BACKGROUND - review the full conversation history. The user's original message almost always contains the goal. Constraints often emerge during discussion. If anything critical is ambiguous, ask ONE focused question - not a checklist.
 
@@ -58,7 +90,7 @@ For GOAL, CONSTRAINTS, BACKGROUND - review the full conversation history. The us
 
 ## Phase 1: Launch 5 Agents
 
-Launch ALL 5 in a single turn. Every agent uses \`run_in_background=true\`. No sequential launches. No waiting between them.
+Launch ALL 5 in a single turn. Subagents always run in the background on Claude Code; there is no `run_in_background` parameter to pass. No sequential launches. No waiting between them.
 
 **Oracle agents receive everything in the prompt** (they cannot read files or run commands). Include DIFF + FILE_CONTENTS + all context directly in the prompt text.
 
@@ -70,11 +102,10 @@ Launch ALL 5 in a single turn. Every agent uses \`run_in_background=true\`. No s
 
 This agent answers: "Did we build exactly what was asked, within the rules we were given?"
 
-\`\`\`
-task(
-  subagent_type="oracle",
-  run_in_background=true,
-  load_skills=[],
+```
+Agent(
+  subagent_type="oh-my-claudecode:verifier",
+  model="opus",
   description="Verify implementation against original goal and constraints",
   prompt="""
 <review_type>GOAL & CONSTRAINT VERIFICATION</review_type>
@@ -139,7 +170,7 @@ OUTPUT FORMAT:
 </findings>
 <blocking_issues>Issues that MUST be fixed. Empty if PASS.</blocking_issues>
 """)
-\`\`\`
+```
 
 ---
 
@@ -149,11 +180,10 @@ This agent answers: "Does it actually work when you run it?"
 
 The QA agent follows a structured process: brainstorm scenarios exhaustively first, then self-review and augment, then create a task list, then execute systematically.
 
-\`\`\`
-task(
-  category="unspecified-high",
-  run_in_background=true,
-  load_skills=["playwright", "dev-browser"],
+```
+Agent(
+  subagent_type="oh-my-claudecode:qa-tester",
+  model="sonnet",
   description="QA by actually running and using the application",
   prompt="""
 <review_type>QA - HANDS-ON APP EXECUTION</review_type>
@@ -251,7 +281,7 @@ OUTPUT FORMAT:
 </test_results>
 <blocking_issues>P0 or P1 failures only. Empty if PASS.</blocking_issues>
 """)
-\`\`\`
+```
 
 ---
 
@@ -259,11 +289,10 @@ OUTPUT FORMAT:
 
 This agent answers: "Is the code well-written, maintainable, and consistent with the codebase?"
 
-\`\`\`
-task(
-  subagent_type="oracle",
-  run_in_background=true,
-  load_skills=[],
+```
+Agent(
+  subagent_type="oh-my-claudecode:code-reviewer",
+  model="opus",
   description="Review overall code quality, patterns, and architecture",
   prompt="""
 <review_type>CODE QUALITY REVIEW</review_type>
@@ -296,7 +325,7 @@ REVIEW DIMENSIONS (examine each):
 
 4. **Error Handling**: Errors properly caught, logged, and propagated? No empty catch blocks? No swallowed errors? User-facing errors are helpful?
 
-5. **Type Safety**: Any \`as any\`, \`@ts-ignore\`, \`@ts-expect-error\`? Proper generic usage? Correct type narrowing? (If TypeScript/typed language)
+5. **Type Safety**: Any `as any`, `@ts-ignore`, `@ts-expect-error`? Proper generic usage? Correct type narrowing? (If TypeScript/typed language)
 
 6. **Performance**: N+1 queries? Unnecessary re-renders? Blocking I/O on hot paths? Memory leaks? Unbounded growth?
 
@@ -326,7 +355,7 @@ OUTPUT FORMAT:
 </findings>
 <blocking_issues>CRITICAL and MAJOR items only. Empty if PASS.</blocking_issues>
 """)
-\`\`\`
+```
 
 ---
 
@@ -336,11 +365,10 @@ This agent answers: "Are there security vulnerabilities in these changes?"
 
 This is supplementary - it focuses exclusively on security. It does NOT comment on code style, architecture, or functionality unless those directly create a security risk.
 
-\`\`\`
-task(
-  subagent_type="oracle",
-  run_in_background=true,
-  load_skills=[],
+```
+Agent(
+  subagent_type="oh-my-claudecode:security-reviewer",
+  model="opus",
   description="Security-focused review of implementation changes",
   prompt="""
 <review_type>SECURITY REVIEW (supplementary)</review_type>
@@ -384,7 +412,7 @@ OUTPUT FORMAT:
 </findings>
 <blocking_issues>CRITICAL and HIGH items only. Empty if PASS.</blocking_issues>
 """)
-\`\`\`
+```
 
 ---
 
@@ -392,11 +420,10 @@ OUTPUT FORMAT:
 
 This agent answers: "Did we miss any context that should have informed this implementation?"
 
-\`\`\`
-task(
-  category="unspecified-high",
-  run_in_background=true,
-  load_skills=["git-master"],
+```
+Agent(
+  subagent_type="general-purpose",
+  model="sonnet",
   description="Mine all accessible contexts for missed requirements or background knowledge",
   prompt="""
 <review_type>CONTEXT MINING - MISSED REQUIREMENTS & BACKGROUND</review_type>
@@ -422,14 +449,14 @@ You are an investigator. Your mission: search every accessible information sourc
 SOURCES TO SEARCH (use every available tool):
 
 1. **Git History** (ALWAYS search):
-   - \`git log --oneline -20 -- {each changed file}\` - recent changes and their reasons
-   - \`git blame {critical sections}\` - who wrote what and when
-   - \`git log --all --grep="{keywords from goal}"\` - related commits
+   - `git log --oneline -20 -- {each changed file}` - recent changes and their reasons
+   - `git blame {critical sections}` - who wrote what and when
+   - `git log --all --grep="{keywords from goal}"` - related commits
    - Look for reverted commits, TODO/FIXME/HACK comments in history
 
-2. **GitHub** (if \`gh\` CLI available):
-   - \`gh issue list --search "{keywords}"\` - related open/closed issues
-   - \`gh pr list --search "{keywords}" --state all\` - related PRs and their review comments
+2. **GitHub** (if `gh` CLI available):
+   - `gh issue list --search "{keywords}"` - related open/closed issues
+   - `gh pr list --search "{keywords}" --state all` - related PRs and their review comments
    - Check if any issue is specifically linked to this work
    - Look at review comments on past PRs touching these files
 
@@ -471,7 +498,7 @@ OUTPUT FORMAT:
 <missed_requirements>Requirements the implementation should address but doesn't. Empty if none.</missed_requirements>
 <blocking_issues>BLOCKING items only. Empty if PASS.</blocking_issues>
 """)
-\`\`\`
+```
 
 ---
 
@@ -479,7 +506,7 @@ OUTPUT FORMAT:
 
 After launching all 5 agents in one turn, **end your response**. Wait for system notifications as each agent completes.
 
-As each completes, collect via \`background_output(task_id="bg_...")\`. Store each verdict:
+As each completes, its report arrives automatically as a task notification — do not poll for it. Store each verdict:
 
 | Agent | Verdict | Notes |
 |-------|---------|-------|
@@ -504,7 +531,7 @@ ANY agent returned FAIL → **REVIEW FAILED - criteria not met**
 
 Compile the final report in this format:
 
-\`\`\`markdown
+```markdown
 # Review Work - Final Report
 
 ## Overall Verdict: PASSED / FAILED
@@ -526,7 +553,7 @@ Compile the final report in this format:
 ## Recommendations
 [If FAILED: exactly what to fix, in priority order]
 [If PASSED: non-blocking suggestions worth considering]
-\`\`\`
+```
 
 If FAILED - be specific. The user should know exactly what to fix and in what order. No vague "consider improving X" - state the problem, the file, and the fix.
 
