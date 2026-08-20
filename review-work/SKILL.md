@@ -87,6 +87,8 @@ Launch ALL 5 in a single turn. Subagents always run in the background on Claude 
 
 **Subagents are autonomous** - they can read files, run commands, and use tools. Give them goals and pointers, not raw content dumps.
 
+**Scope each agent's reading.** Pointers instead of contents moves the context cost from this prompt into the subagent, where running out ends the review with no verdict. Name the files and the base ref each reviewer needs; do not hand all five the whole changeset and leave them to sweep it.
+
 **Every prompt below carries a read-only `<review_rules>` block. Keep it.** A review that edits the code it is reviewing invalidates its own verdict, and the constraint is the only thing preventing it: `oh-my-claudecode:qa-tester` and `general-purpose` have full write access, and the three reviewer types can still mutate files through Bash. Reviewers report; they never fix.
 
 ---
@@ -107,6 +109,8 @@ Agent(
 READ-ONLY REVIEW. Do not change the repository: no edits to existing files, no new or deleted files inside it, no applied fixes, no formatters or codegen that rewrite files, no commits, and no branch or stash operations. Run only commands that leave the working tree unchanged. Report what should change and where; never change it yourself, even when the fix looks trivial.
 
 Scratch files outside the repository are fine, and expected - write them under a temp directory whenever you need to page through large output, work around mangled tool output, or keep intermediate notes. Anything created inside the working tree counts as changing the codebase.
+
+Read selectively; you have a context budget and exhausting it ends the review with no verdict. Start from the diff, open only the files it touches, and read specific line ranges rather than whole large files. Never re-read what you have already read: if tool output comes back garbled or truncated, redirect it to a scratch file and read that, rather than re-running the command. If the changeset is too large to cover, review the highest-risk parts and say in your verdict what you did not reach - a partial review that reports its own scope is useful, a review that dies mid-way is not.
 </review_rules>
 
 <original_goal>
@@ -187,6 +191,8 @@ Agent(
 READ-ONLY REVIEW of the codebase. You may build and run the application, install the dependencies needed to do so, create throwaway test data, and interact with the running app freely - that is the point of this review. You may not modify tracked source: no edits to existing files, no new source files, no deletions, no applied fixes, no commits, and no branch or stash operations. If a test only passes after a code change, report it as a failure and describe the change you would have made; do not make it.
 
 Keep scratch files, logs, and screenshots outside the repository, under a temp directory.
+
+Read selectively; you have a context budget and exhausting it ends the review with no verdict. Prefer running a check and reporting its output over reading source to predict the result. Read specific line ranges rather than whole large files, and never re-read what you have already read: if tool output comes back garbled or truncated, redirect it to a scratch file and read that, rather than re-running the command. If you cannot finish every scenario, report the ones you ran and name the ones you did not reach.
 </review_rules>
 
 <original_goal>
@@ -302,6 +308,8 @@ Agent(
 READ-ONLY REVIEW. Do not change the repository: no edits to existing files, no new or deleted files inside it, no applied fixes, no formatters or codegen that rewrite files, no commits, and no branch or stash operations. Run only commands that leave the working tree unchanged. Report what should change and where; never change it yourself, even when the fix looks trivial.
 
 Scratch files outside the repository are fine, and expected - write them under a temp directory whenever you need to page through large output, work around mangled tool output, or keep intermediate notes. Anything created inside the working tree counts as changing the codebase.
+
+Read selectively; you have a context budget and exhausting it ends the review with no verdict. Start from the diff, open only the files it touches, and read specific line ranges rather than whole large files. Never re-read what you have already read: if tool output comes back garbled or truncated, redirect it to a scratch file and read that, rather than re-running the command. If the changeset is too large to cover, review the highest-risk parts and say in your verdict what you did not reach - a partial review that reports its own scope is useful, a review that dies mid-way is not.
 </review_rules>
 
 <changed_files>
@@ -380,6 +388,8 @@ Agent(
 READ-ONLY REVIEW. Do not change the repository: no edits to existing files, no new or deleted files inside it, no applied fixes, no formatters or codegen that rewrite files, no commits, and no branch or stash operations. Run only commands that leave the working tree unchanged. Report what should change and where; never change it yourself, even when the fix looks trivial.
 
 Scratch files outside the repository are fine, and expected - write them under a temp directory whenever you need to page through large output, work around mangled tool output, or keep intermediate notes. Anything created inside the working tree counts as changing the codebase.
+
+Read selectively; you have a context budget and exhausting it ends the review with no verdict. Start from the diff, open only the files it touches, and read specific line ranges rather than whole large files. Never re-read what you have already read: if tool output comes back garbled or truncated, redirect it to a scratch file and read that, rather than re-running the command. If the changeset is too large to cover, review the highest-risk parts and say in your verdict what you did not reach - a partial review that reports its own scope is useful, a review that dies mid-way is not.
 </review_rules>
 
 <changed_files>
@@ -437,6 +447,8 @@ Agent(
 READ-ONLY REVIEW. Do not change the repository: no edits to existing files, no new or deleted files inside it, no applied fixes, no formatters or codegen that rewrite files, no commits, and no branch or stash operations. Run only commands that leave the working tree unchanged. Report what should change and where; never change it yourself, even when the fix looks trivial.
 
 Scratch files outside the repository are fine, and expected - write them under a temp directory whenever you need to page through large output, work around mangled tool output, or keep intermediate notes. Anything created inside the working tree counts as changing the codebase.
+
+Read selectively; you have a context budget and exhausting it ends the review with no verdict. Start from the diff, open only the files it touches, and read specific line ranges rather than whole large files. Never re-read what you have already read: if tool output comes back garbled or truncated, redirect it to a scratch file and read that, rather than re-running the command. If the changeset is too large to cover, review the highest-risk parts and say in your verdict what you did not reach - a partial review that reports its own scope is useful, a review that dies mid-way is not.
 </review_rules>
 
 <original_goal>
