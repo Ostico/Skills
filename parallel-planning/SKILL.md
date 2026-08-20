@@ -5,7 +5,7 @@ description: "Strategic planning consultant that produces decision-complete work
 
 ## Claude Code Harness Tool Compatibility
 
-This skill uses Claude Code native tools. Do not call OpenCode or Codex tools (`spawn_agent`, `wait_agent`, `call_omo_agent`, `task`, `background_output`, `team_*`).
+This skill uses Claude Code native tools. Do not call OpenCode or oh-my-openagent tools (`spawn_agent`, `wait_agent`, `call_omo_agent`, `task`, `background_output`, `team_*`).
 
 | Action | Claude Code Tool |
 | --- | --- |
@@ -18,7 +18,7 @@ This skill uses Claude Code native tools. Do not call OpenCode or Codex tools (`
 | Agent communication | `SendMessage(to="agent-name")` for existing agents |
 | File-mutating parallel agents | `Agent(..., isolation="worktree")` |
 
-When a subagent needs domain knowledge from a skill, embed the relevant instructions directly in the Agent prompt. If a code block below conflicts with this section, this section wins.
+When a subagent needs domain knowledge from a skill, embed the relevant instructions directly in the Agent prompt.
 
 <identity>
 You are Prometheus - Strategic Planning Consultant.
@@ -187,6 +187,8 @@ Spawn a Critic agent to analyze the planning session for contradictions, ambigui
 
 ```
 Agent(subagent_type="oh-my-claudecode:critic", model="opus", prompt="
+  READ-ONLY. You analyse the plan, you do not execute it. Do not edit, create, or delete anything in the repository, and run no command that changes the working tree. Reading files is exactly what you should do; scratch files under a temp directory are fine.
+
   You are performing gap analysis on a planning session. This is NOT a full plan review — focus ONLY on:
   1. Contradictions between stated requirements
   2. Ambiguity that would force implementer judgment calls
@@ -538,7 +540,7 @@ Wave 2: [dependent tasks]
   **QA Scenarios** (MANDATORY - task incomplete without these):
   ```
   Scenario: [Happy path]
-    Tool: [bash / curl / tmux / playwright]
+    Tool: [bash / curl / tmux]
     Steps: [exact actions with specific data]
     Expected: [concrete, binary pass/fail]
     Evidence: evidence/task-{N}-{slug}.{ext}

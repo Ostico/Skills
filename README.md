@@ -53,7 +53,7 @@ Recurring patterns in these files, worth keeping if you add more:
 - **Account for everything, or say why not.** `manual-qa-plan` requires every changed file to appear in its output even when the entry is "not user-visible, because…". Silent omission is what makes a generated document untrustworthy: the reader cannot tell a considered skip from a miss.
 - **Progressive disclosure over one long file.** Keep `SKILL.md` to the workflow and push detail into `references/` that the agent reads at the step needing it. A step that must be exact and repeatable belongs in `scripts/` rather than in prose — deterministic collection is cheaper and more reliable than asking the model to re-derive a set of `git` invocations each time.
 - **Verify before delivering, and say what was verified.** Skills here end with an explicit checklist and require the agent to state which of those checks it actually ran when handing the work over.
-- **Harness compatibility table at the top.** When a skill originates on another harness, map the tool names explicitly (`task` → `Agent`, `background_output` → auto-notification, `spawn_agent`/`team_*` → `Workflow`) and state that the table wins over any conflicting code block below.
+- **Harness compatibility table at the top.** When a skill originates on another harness, map the tool names explicitly (`task` → `Agent`, `background_output` → the completion notification) and list separately the upstream tools that have no equivalent and must simply not be called (`spawn_agent`, `wait_agent`, `call_omo_agent`, `team_*`). Then fix whatever further down the file contradicts the mapping. Do not add a rule about which half wins: a reader who has to adjudicate between two live instructions will sometimes pick the wrong one, and the losing half stays in the file waiting to be followed.
 
 ## Installing
 
@@ -82,7 +82,7 @@ A newly installed skill is **not** visible to sessions that are already running 
 
 ## Known gaps
 
-All six skills now carry YAML frontmatter whose `name` matches its directory, and the upstream tool calls are gone — `task(`, `background_output(`, `category=`, `load_skills=`, `subagent_type="oracle"` and the escaped backticks are at zero across the repo. What remains:
+All six skills now carry YAML frontmatter whose `name` matches its directory. No upstream call site remains: `task(`, `background_output(`, `category=` and `load_skills=` survive only as rows in the mapping tables and in the do-not-call lists, while `subagent_type="oracle"` and the backslash-escaped backticks are genuinely at zero. What remains:
 
 - **`parallel-planning`'s `ITERATE` branch is unreachable.** Its handler branches on `OKAY` / `ITERATE` / `REJECT`, but the Momus prompt — in both copies — only ever emits `[OKAY]` or `[REJECT]`. So the "max 2 auto-fix rounds" loop never runs and every rejection escalates straight to the user. Fixing it means changing one of the two skills' verdict contracts, so it needs a decision rather than an edit.
 - **`review-plan` duplicates `parallel-planning` lines 270–425.** The same Momus prompt is embedded in both, so the two drift independently — the `.omo`/`.omc` bug and the escaped backticks existed only in the standalone copy, against text that was already correct inside `parallel-planning`. One should import the other.

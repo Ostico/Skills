@@ -9,12 +9,12 @@ This skill uses Claude Code native tools. Do not call OpenCode or oh-my-openagen
 
 | Action | Claude Code Tool |
 | --- | --- |
-| Launch the Momus reviewer | `Agent(subagent_type="claude", model="opus", prompt="<the prompt below>")` |
-| Collect the verdict | Automatic completion notification — do not poll |
+| Launch the Momus reviewer | `Agent(subagent_type="claude", model="opus", prompt="<the prompt below>\n\nReview this plan: <path>")` |
+| Collect the verdict | From the completion notification; do not pass `name` |
+
+Append the plan path after the prompt, and append nothing else. The prompt's first rule rejects any input that does not contain exactly one plan path, so omitting it makes every review return `[REJECT]`.
 
 Pass `model` on the `Agent` call. A subagent cannot inherit a `[1m]` session model, and the call is denied without an explicit tier alias.
-
-Launch a specialized sub-agent, its name is Momus.
 
 
 Use this prompt VERBATIM:
