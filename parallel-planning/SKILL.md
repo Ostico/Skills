@@ -375,7 +375,7 @@ Agent(subagent_type="claude", model="opus", prompt="
   - No contradictions or impossible requirements
   - A capable developer could make progress
 
-  **Remember**: 'Good enough' is good enough.
+  **Remember**: 'Good enough' is good enough. You're not blocking publication of a NASA manual.
 
   ### ITERATE (Blockers the author can fix without being asked anything)
 
@@ -409,7 +409,7 @@ Agent(subagent_type="claude", model="opus", prompt="
   ❌ Listing more than 3 issues → OVERWHELMING, pick top 3
 
   ✅ 'Task 3 references `auth/login.ts` but file doesn't exist' → BLOCKER
-  ✅ 'Task 5 says implement feature with no context, files, or description' → BLOCKER
+  ✅ 'Task 5 says `implement feature` with no context, files, or description' → BLOCKER
   ✅ 'Tasks 2 and 4 contradict each other on data flow' → BLOCKER
 
   ## Output Format
