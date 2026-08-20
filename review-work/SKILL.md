@@ -87,6 +87,8 @@ Launch ALL 5 in a single turn. Subagents always run in the background on Claude 
 
 **Subagents are autonomous** - they can read files, run commands, and use tools. Give them goals and pointers, not raw content dumps.
 
+**Every prompt below carries a read-only `<review_rules>` block. Keep it.** A review that edits the code it is reviewing invalidates its own verdict, and the constraint is the only thing preventing it: `oh-my-claudecode:qa-tester` and `general-purpose` have full write access, and the three reviewer types can still mutate files through Bash. Reviewers report; they never fix.
+
 ---
 
 ### Agent 1: Goal & Constraint Verification (Oracle) - MAIN
@@ -100,6 +102,12 @@ Agent(
   description="Verify implementation against original goal and constraints",
   prompt="""
 <review_type>GOAL & CONSTRAINT VERIFICATION</review_type>
+
+<review_rules>
+READ-ONLY REVIEW. Do not change the repository: no edits to existing files, no new or deleted files inside it, no applied fixes, no formatters or codegen that rewrite files, no commits, and no branch or stash operations. Run only commands that leave the working tree unchanged. Report what should change and where; never change it yourself, even when the fix looks trivial.
+
+Scratch files outside the repository are fine, and expected - write them under a temp directory whenever you need to page through large output, work around mangled tool output, or keep intermediate notes. Anything created inside the working tree counts as changing the codebase.
+</review_rules>
 
 <original_goal>
 {GOAL - paste the user's original request and any clarifications}
@@ -174,6 +182,12 @@ Agent(
   description="QA by actually running and using the application",
   prompt="""
 <review_type>QA - HANDS-ON APP EXECUTION</review_type>
+
+<review_rules>
+READ-ONLY REVIEW of the codebase. You may build and run the application, install the dependencies needed to do so, create throwaway test data, and interact with the running app freely - that is the point of this review. You may not modify tracked source: no edits to existing files, no new source files, no deletions, no applied fixes, no commits, and no branch or stash operations. If a test only passes after a code change, report it as a failure and describe the change you would have made; do not make it.
+
+Keep scratch files, logs, and screenshots outside the repository, under a temp directory.
+</review_rules>
 
 <original_goal>
 {GOAL}
@@ -284,6 +298,12 @@ Agent(
   prompt="""
 <review_type>CODE QUALITY REVIEW</review_type>
 
+<review_rules>
+READ-ONLY REVIEW. Do not change the repository: no edits to existing files, no new or deleted files inside it, no applied fixes, no formatters or codegen that rewrite files, no commits, and no branch or stash operations. Run only commands that leave the working tree unchanged. Report what should change and where; never change it yourself, even when the fix looks trivial.
+
+Scratch files outside the repository are fine, and expected - write them under a temp directory whenever you need to page through large output, work around mangled tool output, or keep intermediate notes. Anything created inside the working tree counts as changing the codebase.
+</review_rules>
+
 <changed_files>
 {CHANGED_FILES - read these, plus neighboring files that show the existing patterns}
 </changed_files>
@@ -356,6 +376,12 @@ Agent(
   prompt="""
 <review_type>SECURITY REVIEW (supplementary)</review_type>
 
+<review_rules>
+READ-ONLY REVIEW. Do not change the repository: no edits to existing files, no new or deleted files inside it, no applied fixes, no formatters or codegen that rewrite files, no commits, and no branch or stash operations. Run only commands that leave the working tree unchanged. Report what should change and where; never change it yourself, even when the fix looks trivial.
+
+Scratch files outside the repository are fine, and expected - write them under a temp directory whenever you need to page through large output, work around mangled tool output, or keep intermediate notes. Anything created inside the working tree counts as changing the codebase.
+</review_rules>
+
 <changed_files>
 {CHANGED_FILES}
 </changed_files>
@@ -406,6 +432,12 @@ Agent(
   description="Mine all accessible contexts for missed requirements or background knowledge",
   prompt="""
 <review_type>CONTEXT MINING - MISSED REQUIREMENTS & BACKGROUND</review_type>
+
+<review_rules>
+READ-ONLY REVIEW. Do not change the repository: no edits to existing files, no new or deleted files inside it, no applied fixes, no formatters or codegen that rewrite files, no commits, and no branch or stash operations. Run only commands that leave the working tree unchanged. Report what should change and where; never change it yourself, even when the fix looks trivial.
+
+Scratch files outside the repository are fine, and expected - write them under a temp directory whenever you need to page through large output, work around mangled tool output, or keep intermediate notes. Anything created inside the working tree counts as changing the codebase.
+</review_rules>
 
 <original_goal>
 {GOAL}
