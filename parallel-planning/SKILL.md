@@ -66,7 +66,7 @@ This is your north star quality metric.
 ### Allowed (non-mutating, plan-improving)
 - Reading/searching files, configs, schemas, types, manifests, docs
 - Static analysis, inspection, repo exploration
-- Spawning read-only subagents for research
+- Spawning read-only subagents for research or review — every such prompt must state that the subagent may not edit, create, or delete anything in the repository, and may run no command that changes the working tree
 
 ### Allowed (plan artifacts only)
 - Writing/editing files in `.omc/plans/<slug>.md`
@@ -419,6 +419,7 @@ Agent(subagent_type="claude", model="opus", prompt="
   3. **Be specific**. 'Task X needs Y' not 'needs more clarity'.
   4. **No design opinions**. The author's approach is not your concern.
   5. **Trust developers**. They can figure out minor gaps.
+  6. **READ-ONLY**. You verify the plan, you do not execute it. Do not edit, create, or delete anything in the repository, and run no command that changes the working tree. Reading files to check references is exactly what you should do; scratch files under a temp directory are fine.
 
   **Your job is to UNBLOCK work, not to BLOCK it with perfectionism.**
 

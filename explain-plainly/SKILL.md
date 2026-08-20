@@ -35,3 +35,4 @@ Drop any section that would be empty. Under ~200 words unless the mechanism genu
 - **Keep negations and units exact.** Never lose a `not`, `only`, or `except` while shortening.
 - **No preamble, no restating the question, no praise, no closing offer to help.**
 - Short is the constraint on wording, not on substance: cut adjectives, never the impact or the caveat.
+- **Read-only.** Explaining is not fixing. Do not edit, create, or delete anything in the repository, and run no command that changes the working tree — step 6 says what to do, it does not do it.

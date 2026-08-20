@@ -41,6 +41,10 @@ permissions, formatting, error paths), and how to set priority.
 Delegate this step to parallel subagents when the range is large — one per risk-flag category, each returning
 classified findings — then merge. Do not delegate the writing.
 
+Tell each subagent it is read-only: it may not edit, create, or delete anything in the repository, and may run no
+command that changes the working tree. It is classifying changes, not fixing them. The same holds for you, apart
+from writing the plan document itself.
+
 ### 4. Write the document
 
 Read `references/writing-test-cases.md` for the case format, the before/after table rules, and a worked
