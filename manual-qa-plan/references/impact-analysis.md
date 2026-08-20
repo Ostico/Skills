@@ -60,6 +60,14 @@ These are the ones a diff-reader misses. Check each against the risk flags:
 
 Existing automated test coverage **lowers priority by one step; it never removes the item.** Automated tests check the code as written, not the product as used.
 
+A regression check inherits the priority of the change that motivated it, **minus one step**, unless the path it
+covers is on the main flow — in which case it keeps it.
+
+Then sanity-check the distribution. Priority exists to order the work, so if much more than a third of the cases
+came out P1 the sort has stopped carrying information and you should re-read the P1s against the definition
+above. On a large release the honest answer is often that a handful genuinely touch permissions or data
+integrity and the rest are P2.
+
 ## Preconditions and test data
 
 A step that cannot be reached is not a test. For every case, state what must exist first: the account and its role, the project or record state, any feature flag, the environment. If reaching the state needs a database change or an unusual setup, put it under "Open questions for the developer" rather than writing steps nobody can follow.

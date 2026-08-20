@@ -63,7 +63,14 @@ MERGE_BASE=$(git merge-base "$BASE" "$HEAD_REF" 2>/dev/null || echo "$BASE")
 } > "$OUT/stat.md"
 
 # --- risk flags -------------------------------------------------------------
-FILES=$(git diff --name-only -M "$MERGE_BASE" "$HEAD_REF")
+ALL_FILES=$(git diff --name-only -M "$MERGE_BASE" "$HEAD_REF")
+
+# Test files are pulled out before any category runs. Left in, they match almost every pattern
+# below — a controller test lands under "routes/controllers", a login test under "auth" — which
+# inflates every category and buries the production file that actually changed.
+TEST_FILES=$(printf '%s\n' "$ALL_FILES" | grep -Ei '(^|/)tests?/|(^|/)spec/|\.test\.[jt]sx?$|\.spec\.[jt]sx?$|Test\.php$' || true)
+FILES=$(printf '%s\n' "$ALL_FILES" | grep -Eiv '(^|/)tests?/|(^|/)spec/|\.test\.[jt]sx?$|\.spec\.[jt]sx?$|Test\.php$' || true)
+
 MATCHED=$(mktemp)
 trap 'rm -f "$MATCHED"' EXIT
 
@@ -107,14 +114,31 @@ flag() { # flag <heading> <grep-E pattern>
        'upload|download|export|import|convert|parser?|xliff|csv|xlsx|pdf'
   flag "Money / billing / quota / limits" \
        'billing|payment|invoice|price|quota|limit|credit|subscription'
+  flag "Transactions / consistency — partial writes, and operations that must be all-or-nothing" \
+       'transaction|commit|rollback|(^|/)lock|atomic|isolation'
+  flag "Data access layer — the shared plumbing every read and write passes through" \
+       'dao|repositor|(^|/)DataAccess/|entity|struct|orm|querybuilder'
+  flag "Output encoding / templating — what reaches the page, and how it is escaped" \
+       'templat|escap|encode|sanitiz|htmlspecial|(^|/)View/|phptal|jinja|handlebars'
+  flag "Pagination / listing / counting — order, totals, and page boundaries" \
+       'pager|paginat|listing|(^|/)count|offset|cursor'
+  flag "Rate limiting / throttling — how many times something may be done" \
+       'ratelimit|rate_limit|throttl|debounce|backoff'
+  flag "Money / billing / quota / limits" \
+       'billing|payment|invoice|price|quota|limit|credit|subscription'
   flag "Submodules — pointer moved; the real change is inside the submodule" \
        '^(plugins|vendor|external|third_party)/'
-  flag "Tests only — no manual test needed unless a test was DELETED (check status above)" \
-       '(^|/)tests?/|(^|/)spec/|_test\.|\.test\.|\.spec\.'
 
   echo "### Uncategorised changed files — read these yourself, no heuristic covered them"
   UNMATCHED=$(printf '%s\n' "$FILES" | grep -vxF -f <(sort -u "$MATCHED") 2>/dev/null || printf '%s\n' "$FILES")
   if [ -n "$UNMATCHED" ]; then printf '%s\n' "$UNMATCHED" | sed 's/^/- /'; else echo "- (none)"; fi
+  echo
+
+  echo "### Test files — excluded from every category above"
+  echo
+  echo "No manual test is needed for these unless one was DELETED (check the status list in files.md)."
+  echo "They are listed here so they can be accounted for without inflating the categories."
+  if [ -n "$TEST_FILES" ]; then printf '%s\n' "$TEST_FILES" | sed 's/^/- /'; else echo "- (none)"; fi
   echo
 
   echo "### Deleted files (behaviour that may simply be gone)"
@@ -127,7 +151,69 @@ flag() { # flag <heading> <grep-E pattern>
   git diff --submodule=short "$MERGE_BASE" "$HEAD_REF" | grep -E '^(Submodule|[+-]Subproject)' | sed 's/^/- /' || true
 } > "$OUT/flags.md"
 
+# --- how well did the grouping actually work --------------------------------
+# Prepended to flags.md, because a high uncategorised share means the categories below cannot be
+# trusted as a work breakdown. On a large application the uncategorised bucket is where the storage,
+# caching and templating layers land — the highest-impact changes in the range.
+PROD_TOTAL=$(printf '%s\n' "$FILES" | grep -c . || true)
+UNMATCHED_TOTAL=$(printf '%s\n' "$FILES" | grep -vxF -f <(sort -u "$MATCHED") 2>/dev/null | grep -c . || true)
+TEST_TOTAL=$(printf '%s\n' "$TEST_FILES" | grep -c . || true)
+if [ "${PROD_TOTAL:-0}" -gt 0 ]; then
+  UNMATCHED_PCT=$(( UNMATCHED_TOTAL * 100 / PROD_TOTAL ))
+else
+  UNMATCHED_PCT=0
+fi
+
+{
+  echo "# Risk flags"
+  echo
+  echo "| | count |"
+  echo "|---|---|"
+  echo "| production files changed | $PROD_TOTAL |"
+  echo "| test files changed (excluded from the categories) | $TEST_TOTAL |"
+  echo "| **matched no category** | **$UNMATCHED_TOTAL (${UNMATCHED_PCT}%)** |"
+  echo
+  if [ "$UNMATCHED_PCT" -ge 20 ]; then
+    echo "> **${UNMATCHED_PCT}% of production files matched no category.** The grouping below has"
+    echo "> failed as a work breakdown — slice the file list yourself instead of trusting these"
+    echo "> sections. Read the uncategorised list first, not last."
+    echo
+  fi
+  echo "Each section below is a category where a code change usually reaches the user."
+  echo "An empty category is simply absent. A file can appear in more than one."
+  echo
+  tail -n +5 "$OUT/flags.md"
+} > "$OUT/flags.md.tmp" && mv "$OUT/flags.md.tmp" "$OUT/flags.md"
+
+# --- per-commit record ------------------------------------------------------
+# Often the fastest route to a test case: a commit body states the previous behaviour, the new
+# behaviour and the reachability, which is exactly what a case needs, while the diff shows only the
+# result. Pointer bumps and docs-only commits are filtered out — they carry no behaviour.
+{
+  echo "# Commit record ($MERGE_BASE..$HEAD_REF)"
+  echo
+  echo "Behaviour commits only. Pointer bumps and docs-only commits are omitted."
+  echo
+  echo "A body is the author's claim, not evidence. Spot-check anything you rely on against the diff."
+  echo
+  git log --no-merges --format='%H|%s' "$MERGE_BASE".."$HEAD_REF" \
+    | grep -Eiv '\|.*(chore\(docs\)|chore\(docker\)|chore\(submodule|docs\(submodule\)|bump the .* pointer)' \
+    | while IFS='|' read -r sha subject; do
+        echo "## $sha"
+        echo "**$subject**"
+        echo
+        body=$(git log -1 --format='%b' "$sha")
+        if [ -n "$body" ]; then printf '%s\n\n' "$body"; fi
+        echo '```'
+        git show --stat --format='' -M "$sha" | sed '/^$/d'
+        echo '```'
+        echo
+      done
+} > "$OUT/commit_details.md"
+
 git diff -M "$MERGE_BASE" "$HEAD_REF" > "$OUT/full.diff"
 
 echo "Dossier written to $OUT"
 wc -l "$OUT"/*.md "$OUT/full.diff"
+echo
+echo "Read commit_details.md first. ${UNMATCHED_PCT}% of production files matched no risk category."
