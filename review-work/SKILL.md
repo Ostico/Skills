@@ -20,14 +20,9 @@ This skill was ported from oh-my-openagent. Do not call its tools (`spawn_agent`
 | Sysiphus Junior (QA) | `subagent_type="oh-my-claudecode:qa-tester"` |
 | Sysiphus Junior (context mining) | `subagent_type="general-purpose"` |
 
-Apply these rules when running this skill:
+Pass `model` on every `Agent` call: a subagent cannot inherit a `[1m]` session model, and the call is denied without an explicit tier alias.
 
-- Give each subagent the changed-file paths and let it read them. Do not paste `FILE_CONTENTS` into a prompt; inline only the specific hunks a reviewer must focus on.
-- Pass `model` on every `Agent` call. A subagent cannot inherit a `[1m]` session model, and the call is denied without an explicit tier alias.
-- Ignore the `xhigh` effort in the roster below; `Agent` has no effort parameter. To set effort, run the fan-out through `Workflow`, where `agent()` accepts `effort: 'xhigh'`.
-- `playwright` and `dev-browser` are unavailable. `oh-my-claudecode:qa-tester` drives interactive CLI sessions via tmux. If the application is browser-based, say so in the QA verdict instead of reporting a pass you could not execute.
-
-These rules take precedence over the code blocks below.
+`oh-my-claudecode:qa-tester` drives interactive CLI sessions via tmux. If the application under review is browser-based, say so in the QA verdict rather than reporting a pass you could not execute.
 
 # Review Work - 5-Agent Parallel Review Orchestrator
 
@@ -36,8 +31,8 @@ Launch 5 specialized sub-agents in parallel to review completed implementation w
 The 5 agents cover complementary concerns - together they form a comprehensive review that no single reviewer could match:
 
 Agents Definition:
-- Oracle: (Opus xhigh)
-- Sysiphus Junior (Sonnet xhigh)
+- Oracle: `model="opus"`, with the `oh-my-claudecode` reviewer type matching the role — `verifier`, `code-reviewer`, or `security-reviewer`
+- Sysiphus Junior: `model="sonnet"`, either `oh-my-claudecode:qa-tester` or `general-purpose` by role
 
 | # | Agent | Type | Role | Focus Level |
 |---|-------|------|------|-------------|
@@ -60,7 +55,6 @@ Before launching agents, collect these inputs. Extract from conversation history
 - **BACKGROUND**: Why this work was needed. Business context, user stories, related systems, prior decisions that informed the approach.
 - **CHANGED_FILES**: Auto-collect via `git diff --name-only HEAD~1` or against the appropriate base (branch point, specific commit).
 - **DIFF**: Auto-collect via `git diff HEAD~1` or against the appropriate base.
-- **FILE_CONTENTS**: Read the full content of each changed file (not just the diff). Oracle agents cannot read files - they need full context in the prompt.
 - **RUN_COMMAND**: How to start/run the application. Check `package.json` scripts, `Makefile`, `docker-compose.yml`, or ask the user.
 
 </required_inputs>
@@ -91,9 +85,7 @@ For GOAL, CONSTRAINTS, BACKGROUND - review the full conversation history. The us
 
 Launch ALL 5 in a single turn. Subagents always run in the background on Claude Code; there is no `run_in_background` parameter to pass. No sequential launches. No waiting between them.
 
-**Oracle agents receive everything in the prompt** (they cannot read files or run commands). Include DIFF + FILE_CONTENTS + all context directly in the prompt text.
-
-**unspecified-high agents are autonomous** - they can read files, run commands, and use tools. Give them goals and pointers, not raw content dumps.
+**Subagents are autonomous** - they can read files, run commands, and use tools. Give them goals and pointers, not raw content dumps.
 
 ---
 
@@ -122,12 +114,8 @@ Agent(
 </background>
 
 <changed_files>
-{CHANGED_FILES - list of modified file paths}
+{CHANGED_FILES - modified file paths; read them before reviewing}
 </changed_files>
-
-<file_contents>
-{FILE_CONTENTS - full content of every changed file, clearly delimited per file}
-</file_contents>
 
 <diff>
 {DIFF - the actual git diff}
@@ -173,7 +161,7 @@ OUTPUT FORMAT:
 
 ---
 
-### Agent 2: QA via App Execution (unspecified-high) - MAIN
+### Agent 2: QA via App Execution (Sysiphus Junior) - MAIN
 
 This agent answers: "Does it actually work when you run it?"
 
@@ -297,12 +285,8 @@ Agent(
 <review_type>CODE QUALITY REVIEW</review_type>
 
 <changed_files>
-{CHANGED_FILES}
+{CHANGED_FILES - read these, plus neighboring files that show the existing patterns}
 </changed_files>
-
-<file_contents>
-{FILE_CONTENTS - full content of changed files AND neighboring files that show existing patterns}
-</file_contents>
 
 <diff>
 {DIFF}
@@ -376,10 +360,6 @@ Agent(
 {CHANGED_FILES}
 </changed_files>
 
-<file_contents>
-{FILE_CONTENTS - full content of changed files}
-</file_contents>
-
 <diff>
 {DIFF}
 </diff>
@@ -415,7 +395,7 @@ OUTPUT FORMAT:
 
 ---
 
-### Agent 5: Context Mining (unspecified-high) - MAIN
+### Agent 5: Context Mining (Sysiphus Junior) - MAIN
 
 This agent answers: "Did we miss any context that should have informed this implementation?"
 
@@ -538,10 +518,10 @@ Compile the final report in this format:
 | # | Review Area | Agent Type | Verdict | Confidence |
 |---|------------|------------|---------|------------|
 | 1 | Goal & Constraint Verification | Oracle | PASS/FAIL | HIGH/MED/LOW |
-| 2 | QA Execution | unspecified-high | PASS/FAIL | HIGH/MED/LOW |
+| 2 | QA Execution | Sysiphus Junior | PASS/FAIL | HIGH/MED/LOW |
 | 3 | Code Quality | Oracle | PASS/FAIL | HIGH/MED/LOW |
 | 4 | Security (supplementary) | Oracle | PASS/FAIL | Severity |
-| 5 | Context Mining | unspecified-high | PASS/FAIL | HIGH/MED/LOW |
+| 5 | Context Mining | Sysiphus Junior | PASS/FAIL | HIGH/MED/LOW |
 
 ## Blocking Issues
 [Aggregated from all agents - deduplicated, prioritized]
