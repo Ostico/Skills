@@ -25,6 +25,7 @@ Where a skill below is a port, it says so.
 | [`review-work/`](review-work/SKILL.md) | Reviews *completed* work with 5 parallel specialists: goal verification, hands-on QA execution, code quality, security audit, context mining (git history, GitHub issues/PRs, Slack/Notion). All 5 must PASS; one FAIL fails the review. | Port of oh-my-openagent |
 | [`manual-qa-plan/`](manual-qa-plan/SKILL.md) | Turns `<BASE>..HEAD` into a manual test plan a person executes against the running application without reading source. Every changed file must be accounted for — a test case, an explicit "not user-visible" row with a reason, or an open question — and every changed behaviour records both the old and the new side. Ships `scripts/collect_changes.sh`, which pre-groups the diff into risk categories and flags what no heuristic matched. | Original |
 | [`explain-plainly/`](explain-plainly/SKILL.md) | Unpacks something already on the table that was stated in two words or dense jargon — a terse finding, a review comment, an error label. Quote it, read what it points at, replace the jargon, then size the real impact. "Nothing breaks in practice, because…" is an allowed verdict. Single pass, no sub-agents. | Original |
+| [`learn-changes/`](learn-changes/SKILL.md) | Teaches a person the change until they can defend it unaided. Stage-gated: they restate first, a checklist file records what is *proven* rather than what was covered, and each stage ends in an `AskUserQuestion` quiz whose distractors are real misconceptions. A wrong answer is treated as a diagnosis and re-tested from another angle. Ends only when every box is ticked. | Original |
 
 Four of them compose into a pipeline:
 
@@ -38,13 +39,13 @@ There are two plan gates, tuned in deliberately opposite directions, but only on
 
 Momus is not a separate skill because its value depends on the loop around it. It earns its cost when the plan goes straight to an executor with nobody reading it in between, which is exactly `parallel-planning`'s "Start Work" handoff — and its `ITERATE` verdict only means something where an auto-fix round exists to consume it. In front of a human approval step, an approve-by-default reviewer is a weaker gate than the person already reading the plan.
 
-`explain-plainly` sits outside that flow — reach for it at any point where an output is too compressed to act on, including the findings the other skills produce.
+Two sit outside that flow. `explain-plainly` is for any point where an output is too compressed to act on, including the findings the other skills produce. `learn-changes` runs after the work exists and is aimed at the person rather than the code: the reviewers above decide whether a change is *correct*, it decides whether whoever now owns it can *maintain* it.
 
 ## Design conventions
 
 Recurring patterns in these files, worth keeping if you add more:
 
-- **Frontmatter is the trigger surface.** The `description` decides whether the agent finds the skill at all, so write it as *when to use this*, not *what this is*, and fold the user's likely phrasings into it. Some skills here also carry a separate `triggers` list; `explain-plainly` and `manual-qa-plan` keep to `name` + `description` only, which is what Anthropic's own skill validator expects.
+- **Frontmatter is the trigger surface.** The `description` decides whether the agent finds the skill at all, so write it as *when to use this*, not *what this is*, and fold the user's likely phrasings into it. Some skills here also carry a separate `triggers` list; `explain-plainly`, `manual-qa-plan`, and `learn-changes` keep to `name` + `description` only, which is what Anthropic's own skill validator expects.
 - **Match the reviewer's prior to the cost of being wrong.** A gate's default verdict is a design parameter, not an accident. Momus, inside `parallel-planning`, approves unless blocked and caps itself at 3 issues, because over-rejecting a cheap plan costs more than it saves; `plan-adversarial-review` refuses to accept a clean result at all. Pick the prior from the blast radius, and have the skill state which prior it has chosen so it cannot quietly drift to the other one.
 - **Independence before synthesis.** Reviewers never see each other's output until a separate synthesis pass. That blindness is the mechanism, not an implementation detail.
 - **Schema-constrain sub-agent output.** JSON Schema with `minLength` guards on evidence fields. This defeats two real failure modes: placeholder submissions (`"evidence": "e"`) that terminate an agent while discarding its actual analysis, and suppressed low-confidence findings.
@@ -66,6 +67,7 @@ ln -s "$PWD/plan-adversarial-review"  ~/.claude/skills/plan-adversarial-review
 ln -s "$PWD/review-work"              ~/.claude/skills/review-work
 ln -s "$PWD/manual-qa-plan"           ~/.claude/skills/manual-qa-plan
 ln -s "$PWD/explain-plainly"          ~/.claude/skills/explain-plainly
+ln -s "$PWD/learn-changes"            ~/.claude/skills/learn-changes
 
 # Claude Code — project scope
 ln -s "$PWD/review-work" /path/to/project/.claude/skills/review-work
@@ -81,7 +83,7 @@ A newly installed skill is **not** visible to sessions that are already running 
 
 ## Known gaps
 
-All five skills now carry YAML frontmatter whose `name` matches its directory. No upstream call site remains: `task(`, `background_output(`, `category=` and `load_skills=` survive only as rows in the mapping tables and in the do-not-call lists, while `subagent_type="oracle"` and the backslash-escaped backticks are genuinely at zero. What remains:
+All six skills now carry YAML frontmatter whose `name` matches its directory. No upstream call site remains: `task(`, `background_output(`, `category=` and `load_skills=` survive only as rows in the mapping tables and in the do-not-call lists, while `subagent_type="oracle"` and the backslash-escaped backticks are genuinely at zero. What remains:
 
 - **Momus only accepts a plan at `.omc/plans/*.md`.** Its input rule rejects anything else, so it reviews what `parallel-planning` wrote and nothing else. That is deliberate now that it lives inside the loop, but it does mean the gate cannot be pointed at a plan from elsewhere. If you ever want that, add a lenient mode to `plan-adversarial-review`, which already resolves a path, a file, or inline text.
 - **`review-work` fans out with `Agent`, which caps every reviewer below the orchestrator.** A subagent cannot inherit a `[1m]` session model — that is why `model` is mandatory — so each reviewer gets a standard window while the orchestrator may have 1M. Running the skill on this repo's own changes killed two of five reviewers on context exhaustion for exactly this reason. The prompts now bound what each one reads, which is the only lever `Agent` offers. The same call also has no `effort` parameter, so upstream's `xhigh` was dropped rather than ported. `Workflow`'s `agent()` addresses both — it inherits the resolved session model and accepts `effort` — so moving the fan-out there is the structural fix, and worth verifying before relying on it.
