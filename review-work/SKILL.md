@@ -81,15 +81,114 @@ For GOAL, CONSTRAINTS, BACKGROUND - review the full conversation history. The us
 
 ---
 
-## Phase 1: Launch 5 Agents
+## Phase 1: Dispatch 5 Reviewers
 
-Launch ALL 5 in a single turn. Subagents always run in the background on Claude Code; there is no `run_in_background` parameter to pass. No sequential launches. No waiting between them.
+Dispatch ALL 5 concurrently. No sequential launches. No waiting between them. Two transports can do that - `Workflow` and `Agent` - and they are not equivalent: see **Transport** below before choosing. Under `Agent`, subagents always run in the background on Claude Code; there is no `run_in_background` parameter to pass.
 
 **Subagents are autonomous** - they can read files, run commands, and use tools. Give them goals and pointers, not raw content dumps.
 
 **Scope each agent's reading.** Pointers instead of contents moves the context cost from this prompt into the subagent, where running out ends the review with no verdict. Name the files and the base ref each reviewer needs; do not hand all five the whole changeset and leave them to sweep it.
 
 **Every prompt below carries a read-only `<review_rules>` block. Keep it.** A review that edits the code it is reviewing invalidates its own verdict, and the constraint is the only thing preventing it: `oh-my-claudecode:qa-tester` and `general-purpose` have full write access, and the three reviewer types can still mutate files through Bash. Reviewers report; they never fix.
+
+### Transport
+
+Prefer `Workflow`. Use `Agent` only when `Workflow` is unavailable, which happens whenever the user has not
+opted into multi-agent orchestration - then say in the final report which transport ran, because the two do not
+review to the same depth.
+
+`Workflow` is not a cosmetic preference. Its `agent()` inherits the resolved session model, so a reviewer gets
+the same context window this session has, `[1m]` included; an `Agent` subagent cannot inherit `[1m]` at any
+tier, which is what makes reviewers die mid-review on a large changeset. `agent()` also accepts `effort`, which
+`Agent` has no parameter for, and it returns its value directly, so a verdict cannot be stranded in an idle
+teammate.
+
+Pass the five prompts through `args`, NOT inlined into the script. They are full of backticks, and inside a JS
+template literal every one needs escaping; as JSON strings they need none. Build each prompt from the block
+below with its placeholders already substituted, and keep the wording of the block exactly as written.
+
+```json
+{
+  "reviewers": [
+    { "key": "goal",     "agentType": "oh-my-claudecode:verifier",          "prompt": "<Agent 1 prompt, placeholders filled>" },
+    { "key": "qa",       "agentType": "oh-my-claudecode:qa-tester",         "prompt": "<Agent 2 prompt, placeholders filled>" },
+    { "key": "quality",  "agentType": "oh-my-claudecode:code-reviewer",     "prompt": "<Agent 3 prompt, placeholders filled>" },
+    { "key": "security", "agentType": "oh-my-claudecode:security-reviewer", "prompt": "<Agent 4 prompt, placeholders filled>" },
+    { "key": "context",  "agentType": "general-purpose",                    "prompt": "<Agent 5 prompt, placeholders filled>" }
+  ]
+}
+```
+
+```javascript
+export const meta = {
+  name: 'review-work',
+  description: 'Five parallel specialists review completed work; one FAIL fails the review',
+  phases: [{ title: 'Review', detail: 'goal, QA, quality, security, context' }],
+}
+
+// minLength guards reject placeholder submissions ("evidence": "e") that would otherwise
+// satisfy the schema, terminate the agent, and discard its real analysis.
+// verifiedOk is required: a PASS with an empty verifiedOk list is unfalsifiable.
+const VERDICT_SCHEMA = {
+  type: 'object',
+  required: ['dimension', 'verdict', 'confidence', 'summary', 'findings', 'verifiedOk'],
+  properties: {
+    dimension: { type: 'string', minLength: 3 },
+    verdict: { type: 'string', enum: ['PASS', 'FAIL'] },
+    confidence: { type: 'string', enum: ['HIGH', 'MEDIUM', 'LOW'] },
+    summary: { type: 'string', minLength: 20 },
+    findings: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['severity', 'title', 'evidence', 'consequence', 'fix'],
+        properties: {
+          severity: { type: 'string', enum: ['blocking', 'significant', 'minor'] },
+          title: { type: 'string', minLength: 12 },
+          evidence: { type: 'string', minLength: 20, description: 'file:line or command output - real, not a placeholder' },
+          consequence: { type: 'string', minLength: 20 },
+          fix: { type: 'string', minLength: 20 },
+        },
+      },
+    },
+    verifiedOk: { type: 'array', items: { type: 'string', minLength: 20 }, description: 'checks actually run that the work survived' },
+    notReached: { type: 'array', items: { type: 'string', minLength: 10 }, description: 'scope this reviewer could not cover' },
+  },
+}
+
+phase('Review')
+
+// No `model` here, deliberately: omitting it is what makes each reviewer inherit the
+// session model and its window. Passing a tier alias would reintroduce the context cap.
+const raw = await parallel(args.reviewers.map(r => () =>
+  agent(r.prompt, {
+    label: `review:${r.key}`,
+    phase: 'Review',
+    agentType: r.agentType,
+    schema: VERDICT_SCHEMA,
+    effort: 'xhigh',
+  }).then(v => ({ key: r.key, verdict: v }), () => ({ key: r.key, verdict: null }))
+))
+
+const got     = raw.filter(Boolean)
+const failed  = got.filter(r => r.verdict && r.verdict.verdict === 'FAIL').map(r => r.key)
+const dead    = got.filter(r => !r.verdict).map(r => r.key)
+const missing = args.reviewers.filter(r => !got.some(g => g.key === r.key)).map(r => r.key)
+// Zero findings AND zero verifiedOk means the lens did not run - not that it is clean.
+const hollow  = got.filter(r => r.verdict && !r.verdict.findings.length && !r.verdict.verifiedOk.length).map(r => r.key)
+
+const unreviewed = [...dead, ...missing, ...hollow]
+
+return {
+  passed: failed.length === 0 && unreviewed.length === 0,
+  failed,
+  unreviewed,
+  reports: got.filter(r => r.verdict),
+}
+```
+
+`parallel` is the right primitive here even though it is a barrier: the gate cannot rule until all five
+dimensions are in. Do not convert it to `pipeline`.
 
 ---
 
@@ -537,11 +636,11 @@ OUTPUT FORMAT:
 
 ---
 
-## Phase 2: Wait & Collect
+## Phase 2: Collect
 
 After launching all 5 agents in one turn, **end your response**. Wait for system notifications as each agent completes.
 
-As each completes, collect its verdict from the completion notification. Do not pass `name` to these calls: a named agent becomes an addressable teammate whose output is not delivered to you, so it finishes, goes idle, and holds its report — you then have to ask for it with `SendMessage(to:"<name>")`. An idle notification is not a delivered verdict. If a reviewer goes idle without reporting, retrieve it before treating that dimension as reviewed. Store each verdict:
+On the `Workflow` path the verdicts are the script's return value - read them there, and treat a `key` listed in `unreviewed` as a dimension nobody reviewed. On the `Agent` fallback, collect each verdict from the completion notification as it arrives. Do not pass `name` to these calls: a named agent becomes an addressable teammate whose output is not delivered to you, so it finishes, goes idle, and holds its report — you then have to ask for it with `SendMessage(to:"<name>")`. An idle notification is not a delivered verdict. If a reviewer goes idle without reporting, retrieve it before treating that dimension as reviewed. Store each verdict:
 
 | Agent | Verdict | Notes |
 |-------|---------|-------|
@@ -561,6 +660,7 @@ Do NOT deliver the final report until ALL 5 have completed.
 
 ALL 5 agents returned PASS → **REVIEW PASSED**
 ANY agent returned FAIL → **REVIEW FAILED - criteria not met**
+ANY agent did not return a verdict, or returned no findings AND no verified-OK list → **REVIEW INCOMPLETE - that dimension is unreviewed.** Name the dimension. An unreviewed dimension withholds the pass; silence from a reviewer is not evidence of a clean result.
 
 </verdict_logic>
 
