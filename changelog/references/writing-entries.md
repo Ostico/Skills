@@ -77,18 +77,27 @@ under Internal and move on. What is not acceptable is leaving it out with no dec
 One emoji per category heading, never inside an entry. They are scanning aids: a reader
 skipping to the fixes should find them by shape.
 
-| Category | Emoji |
-| --- | --- |
-| Breaking changes | ⚠️ |
-| Added | ✨ |
-| Improved | ⚡ |
-| Fixed | 🛠️ |
-| Security | 🔒 |
-| Deprecated | ⏳ |
-| Removed | 🗑️ |
-| Internal | 🧹 |
+The heading emoji are taken from the commit-type emoji convention wherever a category maps
+onto a type, so the same change carries the same symbol in the log and in the changelog.
+Do not substitute a prettier alternative for one of these — a fix is a bug, not a wrench.
 
-Keep this mapping stable across releases — a category that changes emoji reads as a
+| Category | Emoji | From the commit type |
+| --- | --- | --- |
+| Breaking changes | ⚠️ | none - marked by `!` before the colon |
+| Added | ✨ | `feat` |
+| Improved | ⚡️ | `perf` (also covers `refactor` ♻️, `style` 💄, `i18n` 🌐) |
+| Fixed | 🐛 | `fix` |
+| Security | 🔒 | `security` |
+| Deprecated | ⏳ | none |
+| Removed | 🗑️ | none - usually a breaking `feat!` or `refactor!` |
+| Internal | 🔧 | `chore` (also covers `build` 🏗️, `ci` 👷, `docs` 📝, `test` ✅) |
+
+The full type set, for reading `by-type.md` and for any per-entry annotation a project
+already uses: `feat` ✨, `fix` 🐛, `perf` ⚡️, `refactor` ♻️, `style` 💄, `docs` 📝,
+`test` ✅, `build` 🏗️, `ci` 👷, `chore` 🔧, `security` 🔒, `i18n` 🌐, `revert` ⏪️,
+`merge` 🔀.
+
+Keep the mapping stable across releases - a category that changes emoji reads as a
 different category. Two of the largest published changelogs surveyed for this skill
 (Vercel, Slack) use no emoji at all, so if a project prefers plain headings, drop the
 column entirely rather than using emoji inconsistently.

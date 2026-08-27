@@ -31,8 +31,9 @@ scripts/collect_commits.sh <base-ref> [head-ref] -o <outdir>
 Writes five files. Read all five:
 
 - `range.md` — commit count, dates, tags in range, nearest earlier tag, merges landed.
-- `by-type.md` — commits pre-grouped by conventional-commit prefix into the categories the
-  template uses.
+- `by-type.md` — commits grouped by conventional-commit prefix. Most groups map straight
+  onto a template section; Breaking and Removed have no prefix of their own and are filled
+  by hand from `breaking.md`, and a Reverted commit is placed per commit.
 - `breaking.md` — `!:` subjects, anything mentioning BREAKING, and reverts.
 - `unclassified.md` — every commit whose subject matched no known prefix.
 - `contributors.md` — authors in the range.

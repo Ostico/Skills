@@ -27,9 +27,10 @@ MERGE_BASE=$(git merge-base "$BASE" "$HEAD_REF" 2>/dev/null || echo "$BASE")
 types_added='feat'
 types_fixed='fix'
 types_changed='perf|refactor|style'
-types_removed='revert'
+types_localization='i18n'
 types_security='security'
 types_deprecated='deprecate'
+types_reverted='revert'
 types_internal='chore|build|ci|test|docs'
 
 log_type() { # $1 = regex of types
@@ -61,13 +62,20 @@ log_type() { # $1 = regex of types
   echo "# Commits by type"
   echo
   echo "Each line is: sha|date|author|subject"
+  echo
+  echo "The Breaking and Removed sections of a changelog have no conventional type of"
+  echo "their own - fill them by hand from breaking.md. A Reverted commit is not a"
+  echo "Removed feature: decide per commit whether it is no entry, a fix, or a removal."
+  echo "Localization commits are user-visible - they belong under Improved, or under"
+  echo "Added when a locale is new."
   for pair in \
     "Added:$types_added" \
     "Fixed:$types_fixed" \
     "Changed:$types_changed" \
-    "Removed:$types_removed" \
+    "Localization:$types_localization" \
     "Security:$types_security" \
     "Deprecated:$types_deprecated" \
+    "Reverted:$types_reverted" \
     "Internal:$types_internal"
   do
     label=${pair%%:*}; re=${pair#*:}
@@ -100,7 +108,7 @@ log_type() { # $1 = regex of types
   echo "No conventional-commit prefix matched. Read each one and place it by hand -"
   echo "an unclassified commit left out of the changelog is a silent omission."
   echo
-  all_types="$types_added|$types_fixed|$types_changed|$types_removed|$types_security|$types_deprecated|$types_internal"
+  all_types="$types_added|$types_fixed|$types_changed|$types_localization|$types_security|$types_deprecated|$types_reverted|$types_internal"
   out=$(git log --no-merges --date=short --pretty='%h|%ad|%an|%s' "$RANGE" \
         | awk -F'|' -v re="^($all_types)(\\(.*\\))?!?:" '$4 !~ re' || true)
   if [ -n "$out" ]; then echo "$out"; else echo "(none - every commit matched a known type)"; fi

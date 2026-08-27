@@ -24,11 +24,11 @@ RELEASE SUMMARY
 
 - **New capability, named from the user's side.** One sentence on what it lets them do.
 
-### ⚡ Improved
+### ⚡️ Improved
 
 - **What is better now.** The user-visible effect, not the internal change.
 
-### 🛠️ Fixed
+### 🐛 Fixed
 
 - **The symptom the user saw, in their words.** What was happening, and the condition that triggered it.
 
@@ -46,7 +46,7 @@ RELEASE SUMMARY
 
 - **What is gone.** What to use instead.
 
-### 🧹 Internal
+### 🔧 Internal
 
 <!-- Optional, and last. Dependency bumps, refactors, test and CI work: nothing a user
      can observe. Keep it short or drop the section entirely - it is the one section a
