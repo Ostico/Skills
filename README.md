@@ -34,18 +34,17 @@ reading off the diagram:
 flowchart TD
     subgraph PP["parallel-planning"]
         PLAN["interview, explore,<br/>Critic gap analysis"]
-        MOMUS{"Momus:<br/>can it be<br/>executed?"}
+        MOMUS["Momus:<br/>can it be executed?"]
         PLAN --> MOMUS
-        MOMUS -->|"ITERATE<br/>(max 2 rounds)"| PLAN
+        MOMUS -->|"ITERATE (max 2)"| PLAN
     end
 
-    MOMUS -->|OKAY| PAR{"plan-adversarial-review:<br/>should it be built<br/>this way?"}
-    PAR -->|NO-GO| PLAN
-    PAR -->|"GO /<br/>GO WITH CHANGES"| IMPL["implement"]
-    IMPL --> RW{"review-work:<br/>do all 5<br/>reviewers pass?"}
-    RW -->|FAIL| IMPL
-    RW -->|PASS| QA["manual-qa-plan"]
-    QA --> TESTER(["a person tests<br/>the running app"])
+    MOMUS -->|OKAY| PAR["plan-adversarial-review:<br/>should it be built this way?"]
+    PAR -->|"NO-GO"| PLAN
+    PAR -->|"GO / GO WITH CHANGES"| IMPL["implement"]
+    IMPL --> RW["review-work:<br/>do all 5 reviewers pass?"]
+    RW -->|"FAIL"| IMPL
+    RW -->|"PASS"| QA["manual-qa-plan:<br/>a person tests the running app"]
 ```
 
 There are two plan gates, tuned in deliberately opposite directions, but only one of them is a skill you invoke. **Momus** lives inside `parallel-planning` as Phase 4 and asks *can a developer start on this* — approving by default, catching a dead file reference or a task with no entry point. `plan-adversarial-review` asks *should this be built this way* and treats a clean result as a non-functioning review, catching an approach that only falls over once the code exists.
