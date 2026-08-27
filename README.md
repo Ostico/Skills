@@ -2,7 +2,7 @@
 
 A personal collection of **agent skills** — reusable, prompt-level workflows that an AI coding agent loads on demand instead of improvising.
 
-Each skill is a directory whose entry point is `SKILL.md`. There is no build step and no runtime: the agent reads that file and follows it. Most skills stop there. Where one needs more than fits in a single readable file it splits — `references/` for detail loaded only at the step that needs it, `assets/` for templates the agent copies, `scripts/` for the one job better done deterministically than by prompt. `manual-qa-plan` is currently the only skill here with that structure.
+Each skill is a directory whose entry point is `SKILL.md`. There is no build step and no runtime: the agent reads that file and follows it. Most skills stop there. Where one needs more than fits in a single readable file it splits — `references/` for detail loaded only at the step that needs it, `assets/` for templates the agent copies, `scripts/` for the one job better done deterministically than by prompt. `manual-qa-plan` and `changelog` are the two skills here with that structure.
 
 Most of them describe an *orchestration* — which sub-agents to spawn, what each one is told, how their output is schema-constrained, and how the results get merged into one verdict or one plan. These lean hard on **parallel, adversarial, multi-agent structure**: several independent reviewers instead of one, hostile framing instead of polite framing, structured output instead of prose. That is the thesis behind them — one agent reviewing its own work rationalizes; three blind agents attacking from orthogonal angles do not.
 
@@ -24,6 +24,7 @@ Where a skill below is a port, it says so.
 | [`plan-adversarial-review/`](plan-adversarial-review/SKILL.md) | Red-teams a plan before implementation. Three blind refuters (correctness, security, feasibility) attack it in parallel under a hostile prior — "looks fine" counts as a failed review — then one synthesis judge dedupes, ranks by blast radius × likelihood, and issues `GO` / `GO WITH CHANGES` / `NO-GO`. | Original |
 | [`review-work/`](review-work/SKILL.md) | Reviews *completed* work with 5 parallel specialists: goal verification, hands-on QA execution, code quality, security audit, context mining (git history, GitHub issues/PRs, Slack/Notion). All 5 must PASS; one FAIL fails the review. | Port of oh-my-openagent |
 | [`manual-qa-plan/`](manual-qa-plan/SKILL.md) | Writes a manual test plan document for a base-commit-to-HEAD range. A tester follows it against the running app without reading code: steps, expected result, and — where behaviour changed — before versus now. No changed file may be skipped: each gets a test case, a "not user-visible" note with a reason, or an open question. `collect_changes.sh` sorts the diff by risk; `verify_coverage.sh` checks nothing was left out before hand-off. | Original |
+| [`changelog/`](changelog/SKILL.md) | Writes the changelog for a tag-, branch-, or commit-to-HEAD range, in emoji-headed markdown sections. Every commit must land in an entry, under Internal as user-invisible, or on an open-questions list — none may be silently dropped, and each one that stays is rewritten from what the author did to the code into what changed for the reader. `collect_commits.sh` groups the range by conventional-commit type and isolates the breaking and unprefixed commits that need reading by hand. | Original |
 | [`explain-plainly/`](explain-plainly/SKILL.md) | Unpacks something already on the table that was stated in two words or dense jargon — a terse finding, a review comment, an error label. Quote it, read what it points at, replace the jargon, then size the real impact. "Nothing breaks in practice, because…" is an allowed verdict. Single pass, no sub-agents. | Original |
 | [`learn-changes/`](learn-changes/SKILL.md) | Teaches a person the change until they can defend it unaided. Stage-gated: they restate first, a checklist file records what is *proven* rather than what was covered, and each stage ends in an `AskUserQuestion` quiz whose distractors are real misconceptions. A wrong answer is treated as a diagnosis and re-tested from another angle. Ends only when every box is ticked. | Original |
 
@@ -51,7 +52,7 @@ There are two plan gates, tuned in deliberately opposite directions, but only on
 
 Momus is not a separate skill because its value depends on the loop around it. It earns its cost when the plan goes straight to an executor with nobody reading it in between, which is exactly `parallel-planning`'s "Start Work" handoff — and its `ITERATE` verdict only means something where an auto-fix round exists to consume it. In front of a human approval step, an approve-by-default reviewer is a weaker gate than the person already reading the plan.
 
-Two sit outside that flow. `explain-plainly` is for any point where an output is too compressed to act on, including the findings the other skills produce. `learn-changes` runs after the work exists and is aimed at the person rather than the code: the reviewers above decide whether a change is *correct*, it decides whether whoever now owns it can *maintain* it.
+Three sit outside that flow. `explain-plainly` is for any point where an output is too compressed to act on, including the findings the other skills produce. `learn-changes` runs after the work exists and is aimed at the person rather than the code: the reviewers above decide whether a change is *correct*, it decides whether whoever now owns it can *maintain* it. `changelog` runs last, on the same kind of range `manual-qa-plan` reads, but points the other way — that one writes for a tester who is about to exercise the change, this one writes for whoever has to live with it once it ships.
 
 ## Design conventions
 
@@ -80,6 +81,7 @@ ln -s "$PWD/review-work"              ~/.claude/skills/review-work
 ln -s "$PWD/manual-qa-plan"           ~/.claude/skills/manual-qa-plan
 ln -s "$PWD/explain-plainly"          ~/.claude/skills/explain-plainly
 ln -s "$PWD/learn-changes"            ~/.claude/skills/learn-changes
+ln -s "$PWD/changelog"                ~/.claude/skills/changelog
 
 # Claude Code — project scope
 ln -s "$PWD/review-work" /path/to/project/.claude/skills/review-work
@@ -89,13 +91,13 @@ Other harnesses use the same layout under a different root: `.opencode/skills/` 
 
 Symlinking (rather than copying) means editing a skill here updates it everywhere immediately.
 
-Symlink the skill *directory*, never just its `SKILL.md` — `manual-qa-plan` resolves `references/`, `assets/`, and `scripts/` relative to its own directory, so a bare file symlink loses them.
+Symlink the skill *directory*, never just its `SKILL.md` — `manual-qa-plan` and `changelog` resolve `references/`, `assets/`, and `scripts/` relative to their own directory, so a bare file symlink loses them.
 
 A newly installed skill is **not** visible to sessions that are already running — the skill list is built at session start and there is no reload. To use one immediately, tell the running agent `Read <path>/SKILL.md and follow it for this: …`; sessions started afterwards pick it up on their own.
 
 ## Known gaps
 
-All six skills now carry YAML frontmatter whose `name` matches its directory. No upstream call site remains: `task(`, `background_output(`, `category=` and `load_skills=` survive only as rows in the mapping tables and in the do-not-call lists, while `subagent_type="oracle"` and the backslash-escaped backticks are genuinely at zero. What remains:
+All seven skills now carry YAML frontmatter whose `name` matches its directory. No upstream call site remains: `task(`, `background_output(`, `category=` and `load_skills=` survive only as rows in the mapping tables and in the do-not-call lists, while `subagent_type="oracle"` and the backslash-escaped backticks are genuinely at zero. What remains:
 
 - **Momus only accepts a plan at `.omc/plans/*.md`.** Its input rule rejects anything else, so it reviews what `parallel-planning` wrote and nothing else. That is deliberate now that it lives inside the loop, but it does mean the gate cannot be pointed at a plan from elsewhere. If you ever want that, add a lenient mode to `plan-adversarial-review`, which already resolves a path, a file, or inline text.
 - **`review-work` now fans out with `Workflow`, and falls back to `Agent` only without a multi-agent opt-in.** That fallback keeps the original defect: an `Agent` subagent cannot inherit a `[1m]` session model at any tier, so each reviewer gets a standard window while the orchestrator may have 1M, and the call has no `effort` parameter either. Running the skill on this repo's own changes killed two of five reviewers on context exhaustion for exactly that reason. On the `Workflow` path both are fixed — `agent()` inherits the resolved session model and accepts `effort` — but the inheritance is documented behaviour that has not yet been measured end to end here, so confirm a reviewer really gets the larger window before trusting the path on a big changeset. The skill states which transport ran, because the two do not review to the same depth.
