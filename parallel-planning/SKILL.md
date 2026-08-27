@@ -101,11 +101,57 @@ Eliminate unknowns by discovering facts, not by asking the user.
 
 Before asking the user any question, perform at least one targeted exploration pass:
 
-- Spawn parallel read-only subagents via `Agent(subagent_type="Explore", model="sonnet", prompt="...")` for internal codebase patterns, conventions, similar implementations, naming/registration patterns.
+- Spawn parallel read-only subagents via `Agent(subagent_type="Explore", model="sonnet", prompt="...")` for internal codebase patterns, conventions, similar implementations, naming/registration patterns. Read **Bounding an exploration agent** below before writing the prompt, and **Transport** before choosing how to spawn.
 - Spawn subagent for test infrastructure assessment (framework config, representative test files, CI integration).
 - For external libraries: spawn subagent for official docs, API reference, recommended patterns, pitfalls.
 
 While subagents run, use direct read-only tools (`Read`, `Bash(command="grep -rn ...")`, MCP tools like `ast_grep_search` and `lsp_*` via ToolSearch) for immediate context. Do not idle.
+
+### Bounding an exploration agent
+
+An exploration agent dies by filling its context, and the prompt is what fills it. These bounds are not
+optional politeness; an agent that dies returns nothing and the phase has to be run again.
+
+**One question per agent.** A prompt with six numbered asks makes one agent read everything six answers
+need before it can write any of them. Split them: one agent per question, or per tight group of questions
+that read the same file. A question that fans out across the codebase - "which classes use this trait",
+"where is this called from" - is always its own agent, never a sub-item of a question about one file.
+
+**Findings go to a file, not into the reply.** Tell the agent to write its report to a scratch path
+outside the repository and return the path plus a digest: what it found, in at most a screenful. This is
+the bound that matters most, because it also protects this context - six exhaustive reports returned
+inline will exhaust the planner as surely as one exhaustive read exhausts an explorer.
+
+**Ask for the decisive lines, never complete bodies.** "Full signature and its complete body", "be
+exhaustive", "do not summarise away parameter lists" are instructions to accumulate. What a plan actually
+needs is the signature, the `file:line`, and the few lines that carry the behaviour - the call order, the
+guard, the key construction. Word it that way: exhaustive on *signatures and locations*, decisive lines
+only for bodies. If a complete body genuinely must be reproduced, name that one method and let the agent
+put the body in its file, not in its reply.
+
+**Name the files, or name the search that finds them.** An agent told to map a "reference shape" with no
+paths sweeps until it runs out. Give the paths already known, and for the rest give the grep.
+
+**Say what not to read.** Test fixtures, vendor directories, generated code, and migrations are the usual
+sinks. An explorer with no exclusion list reads them.
+
+### Transport
+
+`Agent` is the default and is correct for most exploration. Reach for `Workflow` when a question is large
+enough that an `Agent` explorer has already died on it, or is obviously about to - a reference shape spread
+over a thousand-plus lines, or a fan-out across a whole layer - and only when the user has opted into
+multi-agent orchestration.
+
+The difference is the window, not the wording. `Workflow`'s `agent()` inherits the resolved session model,
+so an explorer gets the context window this session has, `[1m]` included. An `Agent` subagent cannot
+inherit `[1m]` at any tier. Read the `model="sonnet"` in the call above for what it is: a tier choice that
+some harnesses require on every subagent call, and that never buys context. Raising it to `opus` does not
+widen the window by one token, so do not reach for a bigger tier when an explorer dies - that is not the
+lever.
+
+Splitting the question is the first fix and works under both transports. A larger window buys room; it does
+not bound an unbounded prompt, and a prompt that asks one agent for six exhaustive answers will exhaust
+whatever window it is given.
 
 **Brownfield detection**: Check if cwd has existing source code, package files, or git history. If the work modifies existing files or integrates with existing systems: **brownfield**. Otherwise: **greenfield**. Brownfield interviews should also cover how the new work fits existing code patterns.
 
