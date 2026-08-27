@@ -27,12 +27,25 @@ Where a skill below is a port, it says so.
 | [`explain-plainly/`](explain-plainly/SKILL.md) | Unpacks something already on the table that was stated in two words or dense jargon — a terse finding, a review comment, an error label. Quote it, read what it points at, replace the jargon, then size the real impact. "Nothing breaks in practice, because…" is an allowed verdict. Single pass, no sub-agents. | Original |
 | [`learn-changes/`](learn-changes/SKILL.md) | Teaches a person the change until they can defend it unaided. Stage-gated: they restate first, a checklist file records what is *proven* rather than what was covered, and each stage ends in an `AskUserQuestion` quiz whose distractors are real misconceptions. A wrong answer is treated as a diagnosis and re-tested from another angle. Ends only when every box is ticked. | Original |
 
-Four of them compose into a pipeline:
+Four of them compose into a pipeline. Both gates can send the work backwards, which is the part worth
+reading off the diagram:
 
-```
-parallel-planning  →  plan-adversarial-review  →  (implement)  →  review-work  →  manual-qa-plan
-  make the plan          should it be built?                        gate result    hand to a tester
-   └ Momus: can it be executed?
+```mermaid
+flowchart LR
+    subgraph PP["parallel-planning"]
+        PLAN["interview, explore,<br/>Critic gap analysis"]
+        MOMUS{"Momus:<br/>can it be executed?"}
+        PLAN --> MOMUS
+        MOMUS -->|"ITERATE (max 2 rounds)"| PLAN
+    end
+
+    MOMUS -->|OKAY| PAR{"plan-adversarial-review:<br/>should it be built this way?"}
+    PAR -->|"NO-GO"| PLAN
+    PAR -->|"GO / GO WITH CHANGES"| IMPL["implement"]
+    IMPL --> RW{"review-work:<br/>do all 5 reviewers pass?"}
+    RW -->|"FAIL"| IMPL
+    RW -->|"PASS"| QA["manual-qa-plan"]
+    QA --> TESTER(["a person runs the plan<br/>against the running app"])
 ```
 
 There are two plan gates, tuned in deliberately opposite directions, but only one of them is a skill you invoke. **Momus** lives inside `parallel-planning` as Phase 4 and asks *can a developer start on this* — approving by default, catching a dead file reference or a task with no entry point. `plan-adversarial-review` asks *should this be built this way* and treats a clean result as a non-functioning review, catching an approach that only falls over once the code exists.
