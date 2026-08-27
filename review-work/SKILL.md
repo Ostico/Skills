@@ -197,6 +197,8 @@ Test data goes in a local, disposable instance only. Never write to a shared, st
 Keep scratch files, logs, and screenshots outside the repository, under a temp directory.
 
 Read selectively; you have a context budget and exhausting it ends the review with no verdict. Prefer running a check and reporting its output over reading source to predict the result. Read specific line ranges rather than whole large files, and never re-read what you have already read: if tool output comes back garbled or truncated, redirect it to a scratch file and read that, rather than re-running the command. If you cannot finish every scenario, report the ones you ran and name the ones you did not reach.
+
+Never let command output accumulate in your context - that, not source reading, is what exhausts a QA run. Redirect every build, test suite, server log, and tmux capture to a scratch file and read back only the decisive lines: the failing assertion, the exit code, the error. Do not read a passing log at all. Append each scenario's result to a scratch results file the moment you finish it, and assemble the final report from that file at the end. Your context must hold a running tally, never the full transcript of every scenario you ran.
 </review_rules>
 
 <original_goal>
