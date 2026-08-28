@@ -15,10 +15,27 @@ This skill uses Claude Code native tools. Do not call OpenCode or oh-my-openagen
 | Implementation subagent | `Agent(subagent_type="oh-my-claudecode:executor", model="sonnet", prompt="...")` |
 | Parallel wave execution | `Workflow(script="...")` with `phase()` + `parallel()` |
 | Background agent | `Agent(...)` — always backgrounded and auto-notified on completion; there is no `run_in_background` parameter |
-| Agent communication | `SendMessage(to="agent-name")` for existing agents |
+| Agent communication | `SendMessage(to="agent-name")` - only for an agent that was given a `name`, and see the warning below |
 | File-mutating parallel agents | `Agent(..., isolation="worktree")` |
 
 When a subagent needs domain knowledge from a skill, embed the relevant instructions directly in the Agent prompt.
+
+### Never pass `name` to an agent that owes you a report
+
+Passing `name` does not label an agent, it changes what kind of agent it is. Without a `name`, an
+`Agent` has a return contract: it does the work, hands back its report, and terminates. With a
+`name`, it becomes an addressable teammate whose final output is **never delivered** - it stays
+resident waiting to be messaged, and the only way to get anything out of it is `SendMessage`.
+
+Every agent this skill spawns - explorers, Critic, Momus, executors - owes a report and must
+therefore be spawned **without** `name`. A named explorer or a named Momus is a teammate that
+idles, accumulates, and eventually thrashes autocompact, and the phase that was waiting for its
+verdict gets nothing. The observable symptoms are an agent that never appears to finish, and a
+reviewer still burning tokens after its question has already been answered another way.
+
+`SendMessage` stays in the table for the case it fits: continuing a conversation with an agent
+that already exists and was deliberately created as a teammate. That is not any agent in this
+skill's phases.
 
 <identity>
 You are Prometheus - Strategic Planning Consultant.
@@ -410,6 +427,25 @@ Agent(subagent_type="claude", model="opus", prompt="
   4. **Executability check** → Can each task be started?
   5. **QA scenario check** → Does each task have executable QA scenarios?
   6. **Decide** → Any BLOCKING issues? No = OKAY. Yes = ITERATE with max 3 specific issues, or REJECT if fixing them needs a decision only the author can make.
+
+  ## Reading Discipline (NON-NEGOTIABLE)
+
+  Step 3 is a loop over every reference the plan cites, and a decision-complete plan cites many. Reading
+  whole files in that loop is what kills this review: the context fills, autocompact thrashes, and the
+  phase waiting on your verdict gets nothing.
+
+  - **Existence is a grep, not a read.** To check that a path resolves, or that a symbol is where the
+    plan says it is, use `Bash(command="grep -n ... <file>")` or `ls`. Open a file only when the claim
+    is about its *content*.
+  - **Read a window, never a file.** When you must look, read around the cited line -
+    `Read(file, offset=<line-20>, limit=60)`. You are checking one claim, not learning the file.
+  - **One reference at a time, verdict recorded immediately.** Keep a running list with one line per
+    reference: the path, the line, and either OK or the specific problem. That list is your report.
+  - **Never quote file contents into your report.** Verdicts and locations only. If a reference is
+    wrong, say what the plan claimed and what is actually there in one sentence.
+  - **Prioritise, and disclose.** If there are more references than you can check, check the ones on
+    tasks that could block first, then name the ones you did not reach. An unchecked reference that is
+    disclosed is workable; silently skipping it is not, and it must never be reported as OKAY.
 
   ## Decision Framework
 
