@@ -2,7 +2,7 @@
 
 A personal collection of **agent skills** — reusable, prompt-level workflows that an AI coding agent loads on demand instead of improvising.
 
-Each skill is a directory whose entry point is `SKILL.md`. There is no build step and no runtime: the agent reads that file and follows it. Most skills stop there. Where one needs more than fits in a single readable file it splits — `references/` for detail loaded only at the step that needs it, `assets/` for templates the agent copies, `scripts/` for the one job better done deterministically than by prompt. `manual-qa-plan` and `changelog` are the two skills here with that structure.
+Each skill is a directory whose entry point is `SKILL.md`. There is no build step and no runtime: the agent reads that file and follows it. Most skills stop there. Where one needs more than fits in a single readable file it splits — `references/` for detail loaded only at the step that needs it, `assets/` for templates the agent copies, `scripts/` for the one job better done deterministically than by prompt. `manual-qa-plan`, `changelog`, and `beta-tester` are the skills here with that structure.
 
 Most of them describe an *orchestration* — which sub-agents to spawn, what each one is told, how their output is schema-constrained, and how the results get merged into one verdict or one plan. These lean hard on **parallel, adversarial, multi-agent structure**: several independent reviewers instead of one, hostile framing instead of polite framing, structured output instead of prose. That is the thesis behind them — one agent reviewing its own work rationalizes; three blind agents attacking from orthogonal angles do not.
 
@@ -24,6 +24,7 @@ Where a skill below is a port, it says so.
 | [`plan-adversarial-review/`](plan-adversarial-review/SKILL.md) | Red-teams a plan before implementation. Three blind refuters (correctness, security, feasibility) attack it in parallel under a hostile prior — "looks fine" counts as a failed review — then one synthesis judge dedupes, ranks by blast radius × likelihood, and issues `GO` / `GO WITH CHANGES` / `NO-GO`. | Original |
 | [`review-work/`](review-work/SKILL.md) | Reviews *completed* work with 5 parallel specialists: goal verification, hands-on QA execution, code quality, security audit, context mining (git history, GitHub issues/PRs, Slack/Notion). All 5 must PASS; one FAIL fails the review. | Port of oh-my-openagent |
 | [`manual-qa-plan/`](manual-qa-plan/SKILL.md) | Writes a manual test plan document for a base-commit-to-HEAD range. A tester follows it against the running app without reading code: steps, expected result, and — where behaviour changed — before versus now. No changed file may be skipped: each gets a test case, a "not user-visible" note with a reason, or an open question. `collect_changes.sh` sorts the diff by risk; `verify_coverage.sh` checks nothing was left out before hand-off. | Original |
+| [`beta-tester/`](beta-tester/SKILL.md) | Actually *executes* a testing task against a running application — a real browser for UI surfaces, real HTTP requests for an API, never a simulation. Scopes a bounded checklist, walks the happy path, then deliberately tries to break it, severity-scores each confirmed bug (`IMPACT × REPRODUCIBILITY × SURFACE` with security/data-loss/regression floors), and writes the regression test in whatever harness the project actually runs. Fail-fast: asks for the target URL and a source of truth up front instead of pre-flighting the environment. Authors and runs API requests on the fly with `bruno-mcp` when no collection exists yet. | Original |
 | [`changelog/`](changelog/SKILL.md) | Writes the changelog for a tag-, branch-, or commit-to-HEAD range, in emoji-headed markdown sections. Every commit must land in an entry, under Internal as user-invisible, or on an open-questions list — none may be silently dropped, and each one that stays is rewritten from what the author did to the code into what changed for the reader. `collect_commits.sh` groups the range by conventional-commit type and isolates the breaking and unprefixed commits that need reading by hand. | Original |
 | [`explain-plainly/`](explain-plainly/SKILL.md) | Unpacks something already on the table that was stated in two words or dense jargon — a terse finding, a review comment, an error label. Quote it, read what it points at, replace the jargon, then size the real impact. "Nothing breaks in practice, because…" is an allowed verdict. Single pass, no sub-agents. | Original |
 | [`learn-changes/`](learn-changes/SKILL.md) | Teaches a person the change until they can defend it unaided. Stage-gated: they restate first, a checklist file records what is *proven* rather than what was covered, and each stage ends in an `AskUserQuestion` quiz whose distractors are real misconceptions. A wrong answer is treated as a diagnosis and re-tested from another angle. Ends only when every box is ticked. | Original |
@@ -82,6 +83,7 @@ ln -s "$PWD/manual-qa-plan"           ~/.claude/skills/manual-qa-plan
 ln -s "$PWD/explain-plainly"          ~/.claude/skills/explain-plainly
 ln -s "$PWD/learn-changes"            ~/.claude/skills/learn-changes
 ln -s "$PWD/changelog"                ~/.claude/skills/changelog
+ln -s "$PWD/beta-tester"              ~/.claude/skills/beta-tester
 
 # Claude Code — project scope
 ln -s "$PWD/review-work" /path/to/project/.claude/skills/review-work
@@ -91,7 +93,7 @@ Other harnesses use the same layout under a different root: `.opencode/skills/` 
 
 Symlinking (rather than copying) means editing a skill here updates it everywhere immediately.
 
-Symlink the skill *directory*, never just its `SKILL.md` — `manual-qa-plan` and `changelog` resolve `references/`, `assets/`, and `scripts/` relative to their own directory, so a bare file symlink loses them.
+Symlink the skill *directory*, never just its `SKILL.md` — `manual-qa-plan`, `changelog`, and `beta-tester` resolve `references/`, `assets/`, and `scripts/` relative to their own directory, so a bare file symlink loses them.
 
 A newly installed skill is **not** visible to sessions that are already running — the skill list is built at session start and there is no reload. To use one immediately, tell the running agent `Read <path>/SKILL.md and follow it for this: …`; sessions started afterwards pick it up on their own.
 
