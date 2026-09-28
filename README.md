@@ -1,5 +1,7 @@
 # Skills
 
+![Skills](https://tallyviews.ostico.dev/c/R9ZLLKNCQVOWmTzm)
+
 A personal collection of **agent skills** — reusable, prompt-level workflows that an AI coding agent loads on demand instead of improvising.
 
 Each skill is a directory whose entry point is `SKILL.md`. There is no build step and no runtime: the agent reads that file and follows it. Most skills stop there. Where one needs more than fits in a single readable file it splits — `references/` for detail loaded only at the step that needs it, `assets/` for templates the agent copies, `scripts/` for the one job better done deterministically than by prompt. `manual-qa-plan`, `changelog`, and `beta-tester` are the skills here with that structure.
