@@ -27,8 +27,8 @@ The file is called `agent.md`, not `AGENTS.md`, on purpose: Codex, OpenCode, and
 | --- | --- |
 | How does library X implement Y? Show me the source. | **librarian** |
 | Why did X change in v3? Is this a known bug? Which PR introduced it? | **librarian** |
-| Is this candidate dependency safe to adopt? | **librarian** (code health), alongside `document-specialist` (documented features and fit) |
-| What is the signature or option for this API call? | `document-specialist`: cheaper, docs are enough |
+| Is this candidate dependency safe to adopt? | **librarian**: code at the integration point, open issues, release history |
+| What is the signature or option for this API call? | Read the official docs page directly: cheaper, docs are enough |
 | Which tools exist for job X? | Web search first; hand the shortlist to librarian |
 | Where is X in *this* repository? | `Explore` |
 
@@ -51,20 +51,23 @@ Releases in the last 12 months? Verdict + permalinks.
 ## Tools and model
 
 - `model: sonnet`. Switch to `haiku` in the frontmatter for cheaper, shallower lookups.
-- `Write`, `Edit`, `NotebookEdit`, and `Agent` are disallowed. It still needs `Bash` for `gh` and `git`, and Bash is not restricted, so "read-only" is a rule in its prompt, not an enforced guarantee: it clones into `${TMPDIR:-/tmp}`. Your normal permission mode still applies to its Bash calls.
+- `Write`, `Edit`, `NotebookEdit`, and `Agent` are disallowed. It still needs `Bash` for `gh` and `git`, and Bash is not restricted, so "read-only" is a rule in its prompt, not an enforced guarantee: it clones into a fresh `mktemp -d` directory under `${TMPDIR:-/tmp}`. Your normal permission mode still applies to its Bash calls.
 
 ## Porting notes
 
 `agent.md` is a near-verbatim port of the upstream prompt. Deviations:
 
-- **Frontmatter** replaces the TypeScript wrapper. The upstream `description`, `keyTrigger`, `triggers`, and `useWhen` metadata are merged into `description`, plus a how-to-call line and one example.
+- **Frontmatter** replaces the TypeScript wrapper. The upstream `description`, `keyTrigger`, `triggers`, and `useWhen` metadata are merged into `description`, plus a how-to-call line and one example. The "(Librarian - OhMyOpenCode)" branding suffix is dropped.
 - **Tool restrictions** `write, edit, apply_patch, task, call_omo_agent` become `disallowedTools: Write, Edit, NotebookEdit, Agent`.
 - **Model**: upstream receives it from the caller (tagged `cost: "CHEAP"`); here it is pinned to `sonnet`. `temperature: 0.1` has no Claude Code equivalent and is dropped.
 - **Date awareness**: upstream interpolates the year at build time (`${new Date().getFullYear()}`). A static file cannot, so the lines say "current year" / "last year" and rely on the date in the environment context.
-- **Tool names**: a mapping paragraph is added to TOOL REFERENCE (`websearch` → `WebSearch`, `webfetch` → `WebFetch`, `gh`/`git` → `Bash`). `websearch_web_search_exa(...)` in that list becomes `WebSearch(...)`. Context7 and grep.app calls are kept as written and used only when those MCP servers are installed.
-- **Bug fix**: `gh search prs ... --state merged` becomes `--merged`, because `gh search prs` accepts only `open` or `closed` for `--state`.
+- **Tool names**: a mapping paragraph is added to TOOL REFERENCE (`websearch` → `WebSearch`, `webfetch` → `WebFetch`, `gh`/`git` → `Bash`). `websearch_web_search_exa(...)` in that list becomes `WebSearch(...)`. Context7 and grep.app calls are kept as written; the paragraph gives their Claude Code names (`mcp__<server>__<tool>`) and says to look for them with `ToolSearch` when they are deferred.
+- **`gh` flag fixes**: `gh search prs ... --state merged` becomes `--merged`, and `gh search issues ... --state all` loses the flag (open and closed is already the default). `gh search` accepts only `open` or `closed` for `--state`, so both upstream commands fail.
+- **Clone directory**: upstream clones to fixed paths (`${TMPDIR:-/tmp}/repo`, `${TMPDIR:-/tmp}/repo-name`), so parallel librarians on different libraries collided, and a stale clone from an earlier run could be read as the new one. The Temp Directory section now creates a fresh `mktemp -d` directory per run (`<run-dir>`).
+- **Git working directory**: in Claude Code each Bash call starts in the caller's project, so upstream's bare `git log` / `git blame` after a clone would read the caller's repository. Every git command is now `cd <run-dir>/repo && git ...` in a single call.
+- **Clone depth**: upstream used `--depth 1` and `--depth 50` with `git blame`, which attributes old lines to the shallow boundary commit. History work (TYPE C, and blame in TYPE B) now clones with `--filter=blob:none`.
+- **ast-grep**: "grep or the ast-grep skill" becomes "Grep". No such skill exists in Claude Code.
 
-Accepted limitations, kept as upstream wrote them:
+Accepted limitation:
 
-- Clones go to fixed paths like `${TMPDIR:-/tmp}/repo-name`. Two librarians researching the same repo at the same time can collide, and a stale clone from an earlier run may already exist at that path.
 - Context7 and grep.app are not bundled. Without them, the FAILURE RECOVERY fallbacks apply.

@@ -63,7 +63,7 @@ One directory ships a Claude Code sub-agent instead of a skill, because its work
 
 | Agent | What it does | Origin |
 |---|---|---|
-| [`librarian/`](librarian/README.md) | Read-only research on external open-source code. Classifies the question (conceptual, implementation, history, comprehensive), clones the library at a pinned commit, reads the version-correct docs and the issue/PR history, and cites every code claim with a SHA permalink. Use it to see how a library really works, or to vet a candidate dependency next to `document-specialist`. | Port of oh-my-openagent's Librarian |
+| [`librarian/`](librarian/README.md) | Read-only research on external open-source code. Classifies the question (conceptual, implementation, history, comprehensive), clones the library at a pinned commit, reads the version-correct docs and the issue/PR history, and cites every code claim with a SHA permalink. Use it to see how a library really works, or to vet a candidate dependency before adopting it. | Port of oh-my-openagent's Librarian |
 
 ## Design conventions
 

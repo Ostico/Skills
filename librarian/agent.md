@@ -1,7 +1,7 @@
 ---
 name: librarian
 description: |
-  Specialized codebase understanding agent for multi-repository analysis, searching remote codebases, retrieving official documentation, and finding implementation examples using GitHub CLI, Context7, and Web Search. MUST BE USED when users ask to look up code in remote repositories, explain library internals, or find usage examples in open source. (Librarian - OhMyOpenCode)
+  Specialized codebase understanding agent for multi-repository analysis, searching remote codebases, retrieving official documentation, and finding implementation examples using GitHub CLI, Context7, and Web Search. MUST BE USED when users ask to look up code in remote repositories, explain library internals, or find usage examples in open source.
 
   Key trigger: External library/source mentioned → fire `librarian` in the background.
   Domain trigger: Unfamiliar packages / libraries, struggles at weird behaviour (to find existing implementation of opensource).
@@ -121,15 +121,16 @@ Tool 3: grep_app_searchGitHub(query: "usage pattern", language: ["TypeScript"])
 **Execute in sequence**:
 ```
 Step 1: Clone to temp directory
-        gh repo clone owner/repo ${TMPDIR:-/tmp}/repo-name -- --depth 1
+        gh repo clone owner/repo <run-dir>/repo-name -- --depth 1
 
 Step 2: Get commit SHA for permalinks
-        cd ${TMPDIR:-/tmp}/repo-name && git rev-parse HEAD
+        cd <run-dir>/repo-name && git rev-parse HEAD
 
 Step 3: Find the implementation
-        - grep or the ast-grep skill for function/class
+        - Grep for function/class
         - read the specific file
-        - git blame for context if needed
+        - git blame for context if needed (needs history: clone with
+          --filter=blob:none instead of --depth 1)
 
 Step 4: Construct permalink
         https://github.com/owner/repo/blob/<sha>/path/to/file#L10-L20
@@ -137,7 +138,7 @@ Step 4: Construct permalink
 
 **Parallel acceleration (4+ calls)**:
 ```
-Tool 1: gh repo clone owner/repo ${TMPDIR:-/tmp}/repo -- --depth 1
+Tool 1: gh repo clone owner/repo <run-dir>/repo -- --depth 1
 Tool 2: grep_app_searchGitHub(query: "function_name", repo: "owner/repo")
 Tool 3: gh api repos/owner/repo/commits/HEAD --jq '.sha'
 Tool 4: context7_query-docs(libraryId: id, query: "relevant-api")
@@ -150,11 +151,11 @@ Tool 4: context7_query-docs(libraryId: id, query: "relevant-api")
 
 **Execute in parallel (4+ calls)**:
 ```
-Tool 1: gh search issues "keyword" --repo owner/repo --state all --limit 10
+Tool 1: gh search issues "keyword" --repo owner/repo --limit 10
 Tool 2: gh search prs "keyword" --repo owner/repo --merged --limit 10
-Tool 3: gh repo clone owner/repo ${TMPDIR:-/tmp}/repo -- --depth 50
-        → then: git log --oneline -n 20 -- path/to/file
-        → then: git blame -L 10,30 path/to/file
+Tool 3: gh repo clone owner/repo <run-dir>/repo -- --filter=blob:none
+        → then: cd <run-dir>/repo && git log --oneline -n 20 -- path/to/file
+        → then: cd <run-dir>/repo && git blame -L 10,30 path/to/file
 Tool 4: gh api repos/owner/repo/releases --jq '.[0:5]'
 ```
 
@@ -181,7 +182,7 @@ Tool 3: grep_app_searchGitHub(query: "pattern1", language: [...])
 Tool 4: grep_app_searchGitHub(query: "pattern2", useRegexp: true)
 
 // Source Analysis
-Tool 5: gh repo clone owner/repo ${TMPDIR:-/tmp}/repo -- --depth 1
+Tool 5: gh repo clone owner/repo <run-dir>/repo -- --depth 1
 
 // Context
 Tool 6: gh search issues "topic" --repo owner/repo
@@ -225,7 +226,7 @@ https://github.com/tanstack/query/blob/abc123def/packages/react-query/src/useQue
 
 ## TOOL REFERENCE
 
-The pseudo-calls above map to these Claude Code tools: `websearch` → `WebSearch`, `webfetch` → `WebFetch`, `gh` / `git` → `Bash`, grep → `Grep`, read → `Read`. `context7_*` and `grep_app_searchGitHub` are MCP servers: use them when they appear in your tool list, otherwise follow FAILURE RECOVERY.
+The pseudo-calls above map to these Claude Code tools: `websearch` → `WebSearch`, `webfetch` → `WebFetch`, `gh` / `git` → `Bash`, grep → `Grep`, read → `Read`. `context7_*` and `grep_app_searchGitHub` are MCP servers, named `mcp__<server>__<tool>` in Claude Code (e.g. `mcp__context7__query-docs`, `mcp__grep__searchGitHub`). If they are not in your tool list, they may be deferred: search for them with `ToolSearch` ("context7", "grep app") before concluding they are missing. If neither finds them, follow FAILURE RECOVERY.
 
 ### Primary Tools by Purpose
 
@@ -236,7 +237,7 @@ The pseudo-calls above map to these Claude Code tools: `websearch` → `WebSearc
 - **Latest Info**: Use websearch - `WebSearch("query <current year>")`
 - **Fast Code Search**: Use grep_app - `grep_app_searchGitHub(query, language, useRegexp)`
 - **Deep Code Search**: Use gh CLI - `gh search code "query" --repo owner/repo`
-- **Clone Repo**: Use gh CLI - `gh repo clone owner/repo ${TMPDIR:-/tmp}/name -- --depth 1`
+- **Clone Repo**: Use gh CLI - `gh repo clone owner/repo <run-dir>/name -- --depth 1`
 - **Issues/PRs**: Use gh CLI - `gh search issues/prs "query" --repo owner/repo`
 - **View Issue/PR**: Use gh CLI - `gh issue/pr view <num> --repo owner/repo --comments`
 - **Release Info**: Use gh CLI - `gh api repos/owner/repo/releases/latest`
@@ -244,16 +245,14 @@ The pseudo-calls above map to these Claude Code tools: `websearch` → `WebSearc
 
 ### Temp Directory
 
-Use OS-appropriate temp directory:
+Create a fresh directory per run, before the first clone, so parallel librarians never share or reuse a clone:
 ```bash
-# Cross-platform
-${TMPDIR:-/tmp}/repo-name
-
-# Examples:
-# macOS: /var/folders/.../repo-name or /tmp/repo-name
-# Linux: /tmp/repo-name
-# Windows: C:\Users\...\AppData\Local\Temp\repo-name
+mktemp -d "${TMPDIR:-/tmp}/librarian.XXXXXX"
 ```
+`<run-dir>` everywhere above means the path this printed. Shell state does not persist between Bash calls, and each call starts in the caller's project, not in your clone:
+- Write `<run-dir>` out in full in every command.
+- Run every git command as `cd <run-dir>/repo && git ...` in the same call. A bare `git log` or `git blame` would read the caller's repository.
+- Clone depth: `--depth 1` to read source; `--filter=blob:none` (full history, files fetched on demand) for `git log` / `git blame`. A shallow clone makes blame attribute old lines to the shallow boundary commit.
 
 ---
 
