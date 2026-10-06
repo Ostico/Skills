@@ -57,6 +57,14 @@ Momus is not a separate skill because its value depends on the loop around it. I
 
 Three sit outside that flow. `explain-plainly` is for any point where an output is too compressed to act on, including the findings the other skills produce. `learn-changes` runs after the work exists and is aimed at the person rather than the code: the reviewers above decide whether a change is *correct*, it decides whether whoever now owns it can *maintain* it. `changelog` runs last, on the same kind of range `manual-qa-plan` reads, but points the other way — that one writes for a tester who is about to exercise the change, this one writes for whoever has to live with it once it ships.
 
+## Agents
+
+One directory ships a Claude Code sub-agent instead of a skill, because its work (cloning repos, paging through issues, fetching docs) produces output the caller should never have to hold in context, and because several of it should run in parallel.
+
+| Agent | What it does | Origin |
+|---|---|---|
+| [`librarian/`](librarian/README.md) | Read-only research on external open-source code. Classifies the question (conceptual, implementation, history, comprehensive), clones the library at a pinned commit, reads the version-correct docs and the issue/PR history, and cites every code claim with a SHA permalink. Use it to see how a library really works, or to vet a candidate dependency next to `document-specialist`. | Port of oh-my-openagent's Librarian |
+
 ## Design conventions
 
 Recurring patterns in these files, worth keeping if you add more:
@@ -86,6 +94,10 @@ ln -s "$PWD/explain-plainly"          ~/.claude/skills/explain-plainly
 ln -s "$PWD/learn-changes"            ~/.claude/skills/learn-changes
 ln -s "$PWD/changelog"                ~/.claude/skills/changelog
 ln -s "$PWD/beta-tester"              ~/.claude/skills/beta-tester
+
+# librarian is an agent, not a skill: link its definition file into agents/
+mkdir -p ~/.claude/agents
+ln -s "$PWD/librarian/agent.md"       ~/.claude/agents/librarian.md
 
 # Claude Code — project scope
 ln -s "$PWD/review-work" /path/to/project/.claude/skills/review-work
