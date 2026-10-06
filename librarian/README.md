@@ -1,6 +1,8 @@
 # librarian
 
-A **Claude Code agent**, not a skill: the one directory in this repo that ships a sub-agent definition instead of a `SKILL.md`. It researches external open-source code (libraries, frameworks, SDKs, CLIs) and answers with evidence: source read at a pinned commit, docs for the right version, and the issue and PR history behind a behaviour. Every code claim carries a GitHub permalink pinned to a commit SHA.
+> **This is an agent, not a skill.** It has no `SKILL.md`, it does not go in `~/.claude/skills/`, and it is never invoked with `/librarian`. It is a Claude Code **sub-agent** definition: it is installed into `~/.claude/agents/`, and the main agent launches it through the Agent tool (or you ask for it by name: "use the librarian agent to…").
+
+The one directory in this repo that ships a sub-agent definition instead of a skill. It researches external open-source code (libraries, frameworks, SDKs, CLIs) and answers with evidence: source read at a pinned commit, docs for the right version, and the issue and PR history behind a behaviour. Every code claim carries a GitHub permalink pinned to a commit SHA.
 
 Adapted from the Librarian agent in [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) by [@code-yeongyu](https://github.com/code-yeongyu) (`packages/omo-opencode/src/agents/librarian.ts`).
 
@@ -10,14 +12,37 @@ The work is clone a repo, read files, fetch docs pages, page through issues: a l
 
 ## Install
 
-The agent definition is `agent.md`. Symlink it into your agents directory under the name the harness should see:
+Run from the root of this repository.
+
+**1. Install the agent.** The definition is `agent.md`; symlink it into your agents directory as `librarian.md`:
 
 ```bash
 mkdir -p ~/.claude/agents
 ln -s "$PWD/librarian/agent.md" ~/.claude/agents/librarian.md
 ```
 
-For a single project instead, link it into that project's `.claude/agents/`. Restart Claude Code (or run `/agents`) so it picks the agent up.
+For a single project instead, link it into that project's `.claude/agents/librarian.md`.
+
+**2. Install the two MCP dependencies** (see [Dependencies](#dependencies)). Both are remote HTTP servers, so there is nothing to run locally. `-s user` makes them available in every project:
+
+```bash
+claude mcp add -s user --transport http context7 https://mcp.context7.com/mcp
+claude mcp add -s user --transport http grep https://mcp.grep.app
+```
+
+**3. Check `gh`**, which the agent uses to clone repositories and search issues and PRs:
+
+```bash
+gh auth status
+```
+
+**4. Restart Claude Code.** Agents and MCP servers are loaded at session start. Then check:
+
+```bash
+claude mcp list          # context7 and grep should show as connected
+```
+
+and run `/agents` inside Claude Code: `librarian` should be listed.
 
 The file is called `agent.md`, not `AGENTS.md`, on purpose: Codex, OpenCode, and other harnesses auto-load any `AGENTS.md` they find as instructions, and on a case-insensitive filesystem (default macOS) `agents.md` matches too.
 
@@ -43,10 +68,29 @@ implemented (cite source)? Any open bugs about lost or duplicated jobs?
 Releases in the last 12 months? Verdict + permalinks.
 ```
 
-## Requirements
+## Dependencies
 
-- **Required:** `gh` authenticated (`gh auth status`) and `git`. Without them only the docs paths work.
-- **Optional:** a Context7 MCP server (curated, versioned docs) and a grep.app MCP server (code search across public GitHub). Without them the agent falls back to `WebSearch`/`WebFetch` and `gh search code`, which works but is slower and less precise for docs lookups.
+### Required: `gh` and `git`
+
+`gh` (authenticated) clones repositories, searches issues and PRs, and reads releases; `git` reads history and blame on the clone. Without them only the documentation paths work, and no answer can carry a permalink.
+
+### Recommended: two MCP servers
+
+The upstream prompt is built around two MCP servers. The agent still works without them, but falls back to slower and less precise paths.
+
+| Server | What it gives the agent | Tools, as named in Claude Code | Fallback without it |
+| --- | --- | --- | --- |
+| **[Context7](https://context7.com)**: `https://mcp.context7.com/mcp` | Curated, up-to-date library documentation, indexed per library and per version, returned as focused snippets for a query | `mcp__context7__resolve-library-id` (library name → Context7 ID), `mcp__context7__query-docs` (ID + topic → doc snippets) | Find the docs site with `WebSearch` and read it page by page with `WebFetch`, or clone the repo and read the source and README. `WebFetch` returns a summary of each page rather than its raw text, so long pages and large sitemaps lose detail. |
+| **[grep.app](https://grep.app)**: `https://mcp.grep.app` | Fast code search across public GitHub repositories, with regex and language filters. The agent uses it to find real-world usage of an API and to locate an implementation before cloning | `mcp__grep__searchGitHub` | `gh search code "<query>"`: GitHub's code search, with no regex, stricter rate limits, and less relevant ranking |
+
+Both are remote servers over streamable HTTP: no local process, no install beyond `claude mcp add`. Context7 works without an account under a free rate limit; an API key from context7.com raises it, passed as a header:
+
+```bash
+claude mcp add -s user --transport http context7 https://mcp.context7.com/mcp \
+  --header "CONTEXT7_API_KEY: <your-key>"
+```
+
+When Claude Code defers MCP tools behind tool search, the two servers do not appear in the agent's tool list at start. The prompt tells it to look them up with `ToolSearch` before falling back.
 
 ## Tools and model
 

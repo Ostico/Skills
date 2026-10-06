@@ -98,6 +98,9 @@ ln -s "$PWD/beta-tester"              ~/.claude/skills/beta-tester
 # librarian is an agent, not a skill: link its definition file into agents/
 mkdir -p ~/.claude/agents
 ln -s "$PWD/librarian/agent.md"       ~/.claude/agents/librarian.md
+# ...and its two MCP dependencies (see librarian/README.md#dependencies)
+claude mcp add -s user --transport http context7 https://mcp.context7.com/mcp
+claude mcp add -s user --transport http grep     https://mcp.grep.app
 
 # Claude Code — project scope
 ln -s "$PWD/review-work" /path/to/project/.claude/skills/review-work
