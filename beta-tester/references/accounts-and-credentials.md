@@ -2,39 +2,107 @@
 
 ## Where credentials live
 
-Outside every repo, mode `0600`, never committed. Resolve the path — never hardcode it:
+With the project under test, in its git directory, mode `0600`. The path is resolved from the
+current directory — the project's checkout — never hardcoded. The first rule that applies wins:
 
 ```
-$BETA_TESTER_ENV        an override; if set it must exist
-$HOME/.beta-tester.env  the default
+$BETA_TESTER_ENV                  an override; if set it must exist
+<git common dir>/beta-tester.env  inside a git repo: .git/beta-tester.env
+$HOME/.beta-tester.env            only outside any git repo
 ```
 
-`$BETA_TESTER_ENV`, when set, is an override and is never silently skipped — if it points at
-nothing, that is an error, not a fallthrough.
+Every rule that applies is final: a file missing where it points is an error, never a reason to
+try the next one. Inside a git repo, a file in `$HOME` is not consulted — the accounts belong to
+this project, and another project's `ADMIN` is not this one's.
 
-**A path inside the project's own repo is never consulted, deliberately.** A repo is often
-writable by the running application, may get `git clean`ed, and a skill file that ships inside a
-repo can be checked out onto a branch that overwrites it. Keep real values outside every repo the
-skill might ever touch. Copy the schema from `assets/credentials.env.example`, next to this file,
-into the resolved path and fill in real values there.
+**Why `.git`.** Accounts are per project, and the git directory is the one place in a project
+that is never versioned:
 
-**Check the permissions before reading it.** Group- or world-readable → stop, and give the fix:
+- git never tracks anything inside it, so no `add -f`, ignore rule or rename can commit or push
+  the file;
+- it survives what wipes the working tree — a branch switch, `git stash -u`, `git clean -fdx`;
+- every linked worktree resolves to the same main `.git` (`git rev-parse --git-common-dir`), so
+  one file serves them all.
+
+A fresh clone doesn't have it, and copying the whole project directory copies it. Create it once
+per clone:
 
 ```bash
-[ "$(stat -c '%a' "$ENV_FILE")" = "600" ] || echo "run: chmod 0600 $ENV_FILE"
+f="$(git rev-parse --git-common-dir)/beta-tester.env"
+cp "<skill dir>/assets/credentials.env.example" "$f" && chmod 0600 "$f"
 ```
 
-**Values are never printed.** `_EMAIL`, `_PASSWORD`, and `_API_TOKEN` go into a shell variable and
-are used from there — never `cat`, never `echo`, never inlined into a command string, never
-`set -x`, and never into a report, a summary table, or a filed task. Persona keys and `_LABEL`
-values may be shown; that is what the picker is made of.
+Then fill in real values there.
+
+**Check once per project that `.git` stays private.** Neither Apache nor nginx refuses it by
+default, and mode `0600` doesn't stop a process running as you:
+
+- **A web server whose document root is the checkout** must deny `.git` — matecat's root
+  `.htaccess` does, with `RedirectMatch 404 ^/\.git`. A dev server started in the checkout
+  (`php -S`, `python -m http.server`) serves it to anyone who asks.
+- **A container image built from the checkout** must exclude it: `.git` in `.dockerignore`, or
+  `COPY . .` ships the file. An rsync deploy of the whole directory does the same.
+- **A container with the checkout bind-mounted** can read it, as it can read the rest of the tree.
+
+A project that fails one of these → keep the file outside it, and point `$BETA_TESTER_ENV` at it.
+
+**Run from the target's checkout.** The path comes from the current directory, so a command run
+anywhere else reads another project's accounts, or none. When the target's source isn't checked
+out on this machine, set `$BETA_TESTER_ENV`. Name the resolved file — `$BETA_ENV_FILE`, a path,
+never a value — once, when you pick the persona at workflow step 2.
+
+## The helper — source it in every command
+
+`scripts/beta-env.sh`, in this skill's directory, does the resolving and checking, and is the
+only way this skill reads the file. **Shell state does not survive between tool calls**, so
+source it at the start of every command that touches a credential:
+
+```bash
+. "<skill dir>/scripts/beta-env.sh" || exit 1
+```
+
+Sourcing it:
+
+- resolves the path as above;
+- refuses a missing file, and a file that grants any permission to group or others — the mode of
+  a symlink's target is what counts, and a stricter mode such as `0400` passes;
+- defines `beta_personas`, which prints each usable persona and what it can drive (`UI`, `API`);
+- defines `beta_has KEY`, which prints nothing and only succeeds when the key is set;
+- defines `beta_val KEY`, which prints that key's value and fails when it is not set.
+
+"Set" means not blank, not whitespace only, and not a leftover placeholder. Trailing whitespace,
+a CRLF file's `\r` included, is dropped from every value. To check that a credential exists, use
+`beta_has`, never `beta_val`: the second prints it.
+
+It parses the file and never sources it, so nothing written in the credentials file ever runs.
+A refusal is `[BLOCKED]`: stop and give the user the fix it printed.
+
+## What may be shown, and the one exception
+
+`_PASSWORD` and `_API_TOKEN` values are **secrets**. They never go into a report, a summary, a
+filed task, a file inside a repo, or a command string. Never `cat` the file, never `set -x`.
+
+`_EMAIL` values are identifiers, not secrets. Showing one in the chat is fine — the login check
+below needs it. In a report or a filed task, name the persona key instead, since the people
+reading it don't need the test account's address.
+
+**The one exception.** A secret has to reach you before you can type it into a login form or
+pass it to an MCP tool such as `bruno-mcp`. Get it with `beta_val KEY` in a tool call of its own,
+one value per call, immediately before the call that uses it. That output, and the call that
+uses it, put the value in the session transcript. No instruction prevents that, which is why
+these must be test accounts — never a personal account or a production administrator. Nowhere
+else may the value appear.
+
+When the secret goes to a shell command instead — `curl`, say — it never needs to reach you. Read
+it with `beta_val` inside that same command and pass it through stdin (see "Secret hygiene in
+flight" in `api-mode.md`).
 
 ## Schema
 
 ```
 BETA_TESTER_<PERSONA>_EMAIL
 BETA_TESTER_<PERSONA>_PASSWORD
-BETA_TESTER_<PERSONA>_API_TOKEN     # optional — its presence is what enables API mode
+BETA_TESTER_<PERSONA>_API_TOKEN     # optional — its presence is what enables token-based API calls
 BETA_TESTER_<PERSONA>_LABEL         # optional, one line, shown in the picker
 ```
 
@@ -42,70 +110,87 @@ BETA_TESTER_<PERSONA>_LABEL         # optional, one line, shown in the picker
 for in this project.
 
 Real-world auth shapes vary — a bearer token, a custom header pair, a query parameter, Basic auth.
-`_API_TOKEN` holds whatever single credential the target issues; **the skill asks once, at the
-start of the first API-mode run, how that token is actually sent**, and remembers the answer for
+`_API_TOKEN` holds whatever single credential the target issues; **the skill asks once, before the
+first API-mode request of the run, how that token is actually sent**, and remembers the answer for
 the rest of the run rather than assuming a shape that isn't documented. Don't try to encode the
 transport into the env file — the target's own docs or the oracle usually say it, and asking once
 is cheap.
 
-Discover the personas by **scanning key names**, never from a separate list variable — that would
-just be a second place to forget. Union `_EMAIL` and `_API_TOKEN`, so a persona may be UI-only,
-API-only, or both:
+**Personas are discovered by scanning key names** (`beta_personas`), never from a separate list
+variable — that would just be a second place to forget. Each line it prints is a persona and
+what it can drive: `UI` when `_EMAIL` and `_PASSWORD` are both set, `API` when `_API_TOKEN` is —
+`DEFAULT UI API`, `ADMIN UI`. A persona may be UI-only, API-only, or both. It reads the values
+without printing any of them.
 
-```bash
-grep -oE '^BETA_TESTER_[A-Z0-9_]+_(EMAIL|API_TOKEN)=("[^"]+"|[^"[:space:]]+)' "$ENV_FILE" \
-  | sed -E 's/=.*$//; s/_(EMAIL|API_TOKEN)$//' | sort -u
-```
-
-**An empty value is not a configured persona.** `BETA_TESTER_DEFAULT_EMAIL=""` is a placeholder
-someone hasn't filled in yet, and the regex above requires a non-empty value precisely so the
-picker never offers an account that can't authenticate. Treat a persona whose *needed* credential
-is blank as absent: in UI mode that's `_EMAIL`/`_PASSWORD`, in API mode `_API_TOKEN`. A persona can
-legitimately be configured for one mode and blank for the other.
-
-No credential configured for the persona you need → say so and point at
-`assets/credentials.env.example`. Do **not** try to mint a new credential mid-run on the target's
-behalf unless the task explicitly asks for that — creating accounts or tokens is itself an action
-with consequences, not a setup step to take silently.
+**An empty or placeholder value is not a configured persona.** `=`, `=""` and `=''` are values
+someone hasn't filled in yet, and so are the placeholders older copies of the example file
+shipped (`change-me`, an `@example.com` address), and so is a value of only whitespace. The helper treats
+all of them as not set, for every key, so the picker never offers an account that is certain to
+fail. That is all it can promise: a filled-in credential can still be wrong, and the login or the
+first authenticated call is where that shows.
 
 ## Choosing one — always ask
 
-Never infer the account from the oracle or from the surface under test. A card or issue names
-whoever reported or requested it, which is not necessarily the account that carries the relevant
-entitlement.
+Asked once the checklist exists (workflow step 2 in `SKILL.md`), because only the checklist says
+whether a second persona is needed. Never infer the account from the oracle or from the surface
+under test. A card or issue names whoever reported or requested it, which is not necessarily the
+account that carries the relevant entitlement.
 
 - Ask with one question, one option per persona configured, labelled with `_LABEL` where it
-  exists, and annotated with what it can drive — `UI`, `API`, or both. Beyond a handful of
+  exists, and annotated with what `beta_personas` says it can drive. Beyond a handful of
   options, list the personas as text and ask in prose.
-- **In API mode, offer only personas that carry a non-empty `_API_TOKEN`.** A persona with a
-  login and no token can't act in this mode, and listing it just produces a dead end two steps
-  later. The same applies in reverse: an API-only persona is not offered in UI mode.
-- Exactly one persona configured → state it and skip the question.
+- **Offer only personas that carry the credential the run will use.** Token-based API calls need
+  `API`; a login — in the browser, or over HTTP against session-backed endpoints (see
+  `api-mode.md`) — needs `UI`. Listing a persona that can't act just produces a dead end two steps
+  later.
+- **A cross-persona shape needs a second persona** — AUTHZ, TAMPER, or ENTITLEMENT on the
+  checklist (see `bug-shapes.md`). Ask for it in the same question. For AUTHZ and TAMPER it plays
+  the other caller, so ideally it has no relation to the first: a different team, a different
+  organisation. For ENTITLEMENT it is the account without the gated feature. Only one persona
+  configured → those items are `NOT RUN`; say so.
+- Exactly one persona configured, and no second one needed → state it and skip the question.
 - The request already names the account (*"...as the admin account"*) → skip the question, state
   the choice.
-- None configured → ask the user directly for credentials to use for this run, once, rather than
-  falling back to whatever the browser happens to already be signed in as.
+- **None configured for what the run needs** → say so, and point at
+  `assets/credentials.env.example` and the resolved file path. Offer the two ways forward: the
+  user adds the credentials to the file and says go, or — UI mode only — the run tests as the
+  account the browser is already signed in as, recorded as that persona and checked like any
+  other (see below). Never ask for a password or token in the chat: that is exactly what the file
+  exists to avoid.
+
+Do **not** try to mint a new credential mid-run on the target's behalf unless the task explicitly
+asks for that — creating accounts or tokens is itself an action with consequences, not a setup
+step to take silently.
 
 ## Logging in, and proving it took (UI mode)
 
 A browser shares the user's real session, so it may already be signed in as someone else
-entirely. Never assume. (API mode logs nobody in — it authenticates per request and never touches
-the browser's session. See `api-mode.md`.)
+entirely. Never assume. (Token-based API calls log nobody in — they authenticate per request and
+never touch the browser's session. See `api-mode.md`.) The cleanest set-up is a separate browser
+profile kept for testing, so a run never touches the user's own sessions; suggest it once if the
+run would otherwise have to log the user out.
 
-1. Load the app and read the signed-in identity off the page.
+1. Load the app and read the signed-in identity off the page. Compare it with the persona's
+   `_EMAIL`.
 2. On a mismatch, **ask before logging anyone out** — unless this persona's credentials have
    already been used successfully in this session. A failed login *after* a logout ends the
-   user's working session for nothing. State which account is signed in, which one is configured,
-   and let them choose; testing as the account already signed in is often the right answer,
-   provided it's recorded as the persona. On a yes, log out **through the UI**, then log in.
-   Don't clear cookies blind — a half-cleared session produces phantom logouts that look exactly
-   like bugs you're about to file.
+   user's working session for nothing. State which account is signed in and which persona was
+   chosen, and let them choose; testing as the account already signed in is often the right
+   answer, provided it's recorded as the persona. On a yes, log out **through the UI**, then log
+   in. Don't clear cookies blind — a half-cleared session produces phantom logouts that look
+   exactly like bugs you're about to file.
 3. **Prove the account is actually in the state you need.** How to check this is project-specific
    — a role badge or plan indicator on a settings page, a field in a response the app already
    makes, a visibly different set of controls. Find the project's own way of showing this rather
-   than assuming one; if there's no obvious way, ask. **It doesn't check out → stop.** That
-   account doesn't have what you need to test, so proceeding tests core behaviour wearing the
-   wrong label. This is a setup problem, not a finding: it is not scored and never filed.
+   than assuming one; if there's no obvious way, ask. **It doesn't check out → stop** and report
+   `[BLOCKED]`. That account doesn't have what you need to test, so proceeding tests core
+   behaviour wearing the wrong label. It is not scored and never filed.
+
+**Single sign-on, OAuth, and second factors** can't be driven from this file — there is no
+password to type, or there is a code only the user's device receives. Use the session already
+signed in (after step 3), or ask the user to complete the login by hand and say when it's done.
+Never drive a third-party sign-in on your own: in the user's browser it acts as their real
+identity.
 
 ## The frozen-entitlements trap
 
@@ -124,6 +209,11 @@ found under. A run that doesn't say which account produced a finding is not repr
 
 ## What is not in the credentials file, and cannot be
 
-A resource's own capability — a project password, a session token, an access link — is created
-*by the run*, not configured ahead of time. Never look for one in the env file, never ask the user
-for it. Create the resource, read the capability out of the response, and use it from there.
+A resource's own capability — a project password, a session token, an access link — belongs to a
+resource, not to an account, so it is never configured ahead of time: never look for one in the
+env file. Normally the run creates the resource, reads the capability out of the response, and
+uses it from there.
+
+The exception is an oracle that names a specific existing resource — a bug report that links the
+project it broke on. Then that resource *is* the test, and asking the user for its link is fine.
+Keep the frozen-entitlements trap above in mind: it carries its creator's configuration.
