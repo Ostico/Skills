@@ -59,8 +59,17 @@ account, convincingly and wrongly.
 
 ## Choosing the client
 
-**Probe for `bruno-mcp` first.** Where available, it authors and runs requests in-process rather
-than needing a pre-existing collection or a hand-rolled `curl` command:
+**Choose per persona.** `bruno-mcp` needs credential values in its `variables`, which puts them
+in the session transcript, so it acts as a persona only when that persona shows `TYPED` or the
+user said yes this run (see "The one exception" in `accounts-and-credentials.md`). Every other
+persona's authenticated requests go over direct HTTP, **without asking** — API mode never asks for
+the in-run yes, because direct HTTP does the same job without exposing the value. Requests that
+carry no credential may always use `bruno-mcp`. The header's `Client` line names the client per
+persona.
+
+**For the personas it may act as, probe for `bruno-mcp` first.** Where available, it authors and
+runs requests in-process rather than needing a pre-existing collection or a hand-rolled `curl`
+command:
 
 1. `list_collections`, then `list_requests` — if a collection already exists for this target, it
    can be reused, with care. It was written for someone else's purpose: it may hold DELETE,
@@ -87,9 +96,12 @@ than needing a pre-existing collection or a hand-rolled `curl` command:
      misleading result rather than after.
    - `run_collection` to execute. Pass credential values through its `variables`, which are held
      in memory and never written to disk. Each value reaches you through the one exception in
-     `accounts-and-credentials.md`: `beta_val KEY` in a call of its own, right before this one.
-3. **Every caller is its own group.** More than one persona in a run (authorization probes) → one
-   entry in `groups` per caller. Each group has its own `variables`, its own variable store, and
+     `accounts-and-credentials.md`: `beta_val KEY` in a call of its own, right before this one —
+     so it needs that persona's permission (`TYPED`, or a yes in this run). Without it, send that
+     persona's authenticated requests over direct HTTP, where the value never reaches you.
+3. **Every caller is its own group.** More than one persona with permission in a run
+   (authorization probes) → one entry in `groups` per caller; a caller without permission runs
+   over direct HTTP instead. Each group has its own `variables`, its own variable store, and
    its own cookie jar, so nothing leaks from one caller to another — in either direction:
    - **Give every group an explicit `requests` list.** A group without one runs the whole
      collection. Top-level `requests` cannot be combined with `groups`.

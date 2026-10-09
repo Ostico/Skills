@@ -2,8 +2,8 @@
 
 Don't wait to be told what to try. These are recurring bug clusters across web applications, not
 a checklist to run mechanically — use them to generate adversarial cases against whatever the
-oracle actually describes. COPY, NAMES, PERSIST, LISTS, STALE, ASYNC, SILENT, and ENTITLEMENT
-apply in both modes; the UI-mode and API-mode additions are below. The irreversible-action gate
+oracle actually describes. COPY, NAMES, I18N, PERSIST, LISTS, STALE, ASYNC, SILENT, and
+ENTITLEMENT apply in both modes; the UI-mode and API-mode additions are below. The irreversible-action gate
 in `SKILL.md` applies to every probe here.
 
 - **COPY** — user-facing text should follow the project's *own* stated convention, if it has one
@@ -17,6 +17,12 @@ in `SKILL.md` applies to every probe here.
   characters, combining marks, right-to-left text), HTML entity text, length limits,
   leading/trailing whitespace. Behaviour should be a clean refusal or a clean strip, never a
   silent truncation.
+- **I18N** — the languages and locales the product says it supports. Switch the interface
+  language (in API mode, `Accept-Language` or the locale parameter) and look for strings left
+  untranslated, translations that overflow or get cut off by their control, and placeholders
+  shown raw (`{count}`, `%s`). Dates, numbers and currencies should follow the chosen locale, not
+  the server's. Right-to-left text should lay out right to left. A locale the product doesn't
+  claim to support → `[OBSERVATION]`.
 - **PERSIST** — omit an optional field on an update. Is existing data preserved, or silently
   wiped? Re-read the entity after saving; don't trust a success toast or a 200 status alone.
 - **LISTS** — submit one malformed item inside a list (a row, a column, a batch entry). Does the
@@ -77,8 +83,8 @@ in `SKILL.md` applies to every probe here.
 - **AUTHZ** — the sharpest surface in this mode. Many APIs check a resource's own secret — an
   access password, a share token — separately from the caller's login, inside the handler rather
   than at the routing layer. Probe the seam, using the second persona (see
-  `accounts-and-credentials.md`), one `run_collection` group per caller (see "Choosing the
-  client" in `api-mode.md`):
+  `accounts-and-credentials.md`), one `run_collection` group per caller with permission, direct
+  HTTP for a caller without (see "Choosing the client" in `api-mode.md`):
   - omit every credential, and confirm the call is refused;
   - send persona B's credential against persona A's resource **without** its secret;
   - send a valid credential with a wrong resource secret;

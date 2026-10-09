@@ -14,7 +14,8 @@
 #      symlink target's mode is what counts)
 #   3. defines:
 #        beta_personas   one line per usable persona: its name, then UI when _EMAIL and _PASSWORD
-#                        are both set, API when _API_TOKEN is — e.g. "DEFAULT UI API"
+#                        are both set, API when _API_TOKEN is, TYPED when _TYPED_LOGIN is
+#                        "allow" — e.g. "DEFAULT UI API", "OTHER UI TYPED"
 #        beta_has KEY    silent: succeeds when KEY is set, prints nothing
 #        beta_val KEY    the value of KEY, unquoted; fails when it is not set
 #
@@ -96,6 +97,11 @@ beta_personas() {
           _beta_c="$_beta_c API"
         fi
         if [ -n "$_beta_c" ]; then
+          _beta_get "BETA_TESTER_${_beta_n}_TYPED_LOGIN"
+          if [ "$_beta_v" = allow ]; then
+            _beta_c="$_beta_c TYPED"
+          fi
+          unset _beta_v
           printf '%s%s\n' "$_beta_n" "$_beta_c"
         fi
       done

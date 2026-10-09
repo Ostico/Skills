@@ -107,8 +107,8 @@ version signal when one exists, the control result, and the account with what wa
 its state — a finding whose environment is unrecorded can't be re-checked later, and one found
 under a particular persona may reproduce nowhere else.
 
-**Never put a live credential in a filed task.** No token, no password, no minted session id or
-access link — a board item is visible to the whole team and outlives the run. Describe the input
+**Never put a live credential in a filed task** — in its text or in an attached screenshot. No
+token, no password, no minted session id or access link — a board item is visible to the whole team and outlives the run. Describe the input
 by shape and name the endpoint or page; whoever picks the bug up will mint their own.
 
 Report the created item's URL back.

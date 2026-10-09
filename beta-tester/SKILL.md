@@ -227,7 +227,7 @@ login or the first authenticated request.
 ## API mode
 
 Full mechanics — authenticating, verifying credentials once, authoring and running requests with
-`bruno-mcp` when it's available, using a spec as oracle, and cleaning up what was created — are in
+`bruno-mcp` when it's available (for personas with permission to hand it their credentials), using a spec as oracle, and cleaning up what was created — are in
 `references/api-mode.md`. Read it before the first authenticated request.
 
 ## What counts as a "feature" here
@@ -260,13 +260,20 @@ Given a testing task, or a link to an oracle:
 2. **Choose the account, authenticate, and confirm its state** — see
    `references/accounts-and-credentials.md`. Ask for the persona now, in one question, together
    with a second one if the checklist holds a cross-persona shape (AUTHZ, TAMPER, ENTITLEMENT).
-   State the persona and what was confirmed about it in the header block; a run that doesn't say
-   which account produced a finding is not reproducible.
+   In UI mode, decide in the same message how the browser logs in — order the checklist by
+   persona, move the second persona to API mode where it doesn't need the UI, and ask about the
+   login method only if browser switches remain (see "How the browser gets logged in"). State the
+   persona, how it logged in, and what was confirmed about it in the header block; a run that
+   doesn't say which account produced a finding is not reproducible.
 3. **Happy path first.** Walk the checklist's core flow end-to-end exactly as a normal caller
    would — real clicks/typing/navigation in UI mode, real requests in API mode. Confirm it before
    doing anything adversarial.
 4. **Then dig into edge cases, deliberately trying to break it** — use
    `references/bug-shapes.md` as a generator. The irreversible-action gate applies to every probe.
+
+   **Keep a ledger from the first request on**, in both modes: every resource the run creates —
+   its kind, its id or name, the persona that owns it. Step 10 works from it, and it is what the
+   summary lists when something couldn't be removed.
 5. **Attribute before you score — run the control.** The control is the same scenario without
    the change under test:
    - a flag, toggle, or setting → the same scenario with it **off**. On a shared target, turning
@@ -290,7 +297,7 @@ Given a testing task, or a link to an oracle:
    show it, and create only on a yes.
 9. **Re-check the version signal**, if step 1 found one. Changed mid-run → say so and mark which
    findings predate the change. No signal → skip this step, don't invent one.
-10. **Clean up.** Remove everything the run created:
+10. **Clean up.** Remove everything in the ledger, and everything else the run created:
     - **Resources on the target** → through its API wherever it offers deletion, even after a UI
       run: deleting through the UI raises `confirm()` dialogs, and each one freezes the browser
       tool until a human dismisses it. Use the UI only where the API can't do it, and warn first.
@@ -310,7 +317,7 @@ time, say so and let the user decide.
 
 ## Bug shapes — use these as the generator
 
-Don't wait to be told what to try. The full catalogue — COPY, NAMES, PERSIST, LISTS, STALE, ASYNC,
+Don't wait to be told what to try. The full catalogue — COPY, NAMES, I18N, PERSIST, LISTS, STALE, ASYNC,
 SILENT, ENTITLEMENT, the UI-mode additions (TAMPER, INJECT, NAV, A11Y), and the API-mode additions
 (SPEC, STATUS, AUTHZ, TYPES, PAGINATION, RATE) — is in `references/bug-shapes.md`. Read it before
 the adversarial pass (workflow step 4).
@@ -319,6 +326,9 @@ the adversarial pass (workflow step 4).
 
 - The upfront checklist is the main budget control — use it to avoid open-ended wandering.
 - Screenshot only at decision points or as bug evidence, not after every single action.
+- **Never keep a screenshot that shows a credential**: a token or session id in the address bar,
+  a DevTools panel with cookies or request headers, a password field revealed as text, an API key
+  on a settings page. Retake it without, or describe the screen instead.
 - Batch same-page checks into one navigation instead of re-navigating per assertion.
 - For repetitive sweeps (e.g. "test every field type"), report terse one-line pass confirmations
   per item and only expand detail where something actually failed.
@@ -333,8 +343,9 @@ Stated before the first step, and updated whenever one of its lines changes:
 Target    <URL>
 Mode      UI | API | both — and why
 Oracle    <source> — or "none: exploratory run"
-Account   <persona> · <what was confirmed about its state>
-Client    bruno-mcp | direct HTTP — API mode only
+Account   <persona> · <how: already signed in | user logged in | typed (TYPED or a yes) |
+          token or login over bruno-mcp or direct HTTP> · <what was confirmed about its state>
+Client    per persona: bruno-mcp | direct HTTP — API mode only
 Version   <signal> — or "none exposed"
 Checklist <N items>: <item> · <item> · ...
 ```
@@ -464,8 +475,9 @@ that was answered before this point. Only the persona is asked here; the answer 
 ```
 Target    https://api.example.com/v1/orders
 Mode      API — an endpoint was named. Browser not required, not attached, not a problem.
-Client    bruno-mcp available → authoring a collection (none existed for this target)
-Account   DEFAULT · token verified once ✓ · OTHER as second caller for the authz probe
+Client    DEFAULT bruno-mcp (TYPED), authoring a collection · OTHER direct HTTP (no TYPED)
+Account   DEFAULT · token, TYPED · verified once ✓ · OTHER · token over direct HTTP, second
+          caller for the authz probe
 Oracle    the project's openapi.json, operation POST /v1/orders
 Version   none exposed
 

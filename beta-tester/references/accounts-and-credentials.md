@@ -66,7 +66,8 @@ Sourcing it:
 - resolves the path as above;
 - refuses a missing file, and a file that grants any permission to group or others — the mode of
   a symlink's target is what counts, and a stricter mode such as `0400` passes;
-- defines `beta_personas`, which prints each usable persona and what it can drive (`UI`, `API`);
+- defines `beta_personas`, which prints each usable persona and what it can drive (`UI`, `API`),
+  plus `TYPED` when the user allows typed login for it;
 - defines `beta_has KEY`, which prints nothing and only succeeds when the key is set;
 - defines `beta_val KEY`, which prints that key's value and fails when it is not set.
 
@@ -93,6 +94,11 @@ uses it, put the value in the session transcript. No instruction prevents that, 
 these must be test accounts — never a personal account or a production administrator. Nowhere
 else may the value appear.
 
+The exception needs permission for the persona: either `beta_personas` shows `TYPED` on its line
+(the user set `BETA_TESTER_<PERSONA>_TYPED_LOGIN=allow`, a standing yes), or the user said yes to
+it in this run. See "How the browser gets logged in". Without either, a secret never reaches you:
+the browser logs in another way, and API calls go through direct HTTP.
+
 When the secret goes to a shell command instead — `curl`, say — it never needs to reach you. Read
 it with `beta_val` inside that same command and pass it through stdin (see "Secret hygiene in
 flight" in `api-mode.md`).
@@ -104,6 +110,8 @@ BETA_TESTER_<PERSONA>_EMAIL
 BETA_TESTER_<PERSONA>_PASSWORD
 BETA_TESTER_<PERSONA>_API_TOKEN     # optional — its presence is what enables token-based API calls
 BETA_TESTER_<PERSONA>_LABEL         # optional, one line, shown in the picker
+BETA_TESTER_<PERSONA>_TYPED_LOGIN   # optional, `allow` — the skill may handle this persona's
+                                    # password and token itself, without asking each run
 ```
 
 `<PERSONA>` is a free identifier — `DEFAULT`, `ADMIN`, `TRIAL`, `PAID`, whatever the account is
@@ -119,8 +127,9 @@ is cheap.
 **Personas are discovered by scanning key names** (`beta_personas`), never from a separate list
 variable — that would just be a second place to forget. Each line it prints is a persona and
 what it can drive: `UI` when `_EMAIL` and `_PASSWORD` are both set, `API` when `_API_TOKEN` is —
-`DEFAULT UI API`, `ADMIN UI`. A persona may be UI-only, API-only, or both. It reads the values
-without printing any of them.
+`DEFAULT UI API`, `ADMIN UI`. A persona may be UI-only, API-only, or both. `TYPED` follows when
+the persona is `UI` or `API` and `_TYPED_LOGIN` is `allow` — `OTHER UI API TYPED`. It reads the
+values without printing any of them.
 
 **An empty or placeholder value is not a configured persona.** `=`, `=""` and `=''` are values
 someone hasn't filled in yet, and so are the placeholders older copies of the example file
@@ -177,7 +186,8 @@ run would otherwise have to log the user out.
    user's working session for nothing. State which account is signed in and which persona was
    chosen, and let them choose; testing as the account already signed in is often the right
    answer, provided it's recorded as the persona. On a yes, log out **through the UI**, then log
-   in. Don't clear cookies blind — a half-cleared session produces phantom logouts that look
+   in the way chosen at workflow step 2 (see "How the browser gets logged in", below). Don't
+   clear cookies blind — a half-cleared session produces phantom logouts that look
    exactly like bugs you're about to file.
 3. **Prove the account is actually in the state you need.** How to check this is project-specific
    — a role badge or plan indicator on a settings page, a field in a response the app already
@@ -192,6 +202,66 @@ signed in (after step 3), or ask the user to complete the login by hand and say 
 Never drive a third-party sign-in on your own: in the user's browser it acts as their real
 identity.
 
+## How the browser gets logged in
+
+Three ways, in this order of preference. Only the third puts a password in the session
+transcript.
+
+1. **The account already signed in.** Read the identity off the page and record it as the
+   persona. Nothing is typed.
+2. **The user logs in by hand.** Ask: *"Log in as `<persona>` (`<email>`) and tell me when you're
+   done."* The password never reaches you. It costs the user one action per switch, and needs
+   someone there to do it.
+3. **You type the password** — `beta_val` in a call of its own, then the browser tool. Only for a
+   persona with permission (see "The one exception"). If the browser tool refuses to type into a
+   password field, fall back to 2.
+
+**Decide once, at workflow step 2, not at every switch:**
+
+1. Order the checklist by persona — all of A's items, then all of B's — so each persona is
+   entered once.
+2. Give the second persona API mode wherever the item doesn't depend on what *that persona sees*
+   in the UI (see "The second persona acts through the API"). Those items need no browser switch.
+3. Count the browser logins left. **Every login counts**, the first one included: the browser
+   signed in as someone other than the persona needs a login too. Only a browser already signed
+   in as the persona needs none. Read the signed-in identity off the page before asking, and
+   count against the personas you propose. If the user picks others, recount; a method question
+   that only becomes necessary then follows the persona answer, still asked once.
+   - **none** → way 1; no question about the method.
+   - **one, for a persona without `TYPED`, and someone there** → way 2; no question about the
+     method.
+   - **one or more, and every persona involved shows `TYPED`** → way 3, without asking.
+   - **otherwise, with someone there** → one question, in the same message as the persona question: *"This run needs
+     N account switches between A and B in the browser. I can log in for you by typing the
+     password from the credentials file — the value ends up in this session's transcript — or
+     you switch account when I ask. Which do you prefer?"* The answer holds for the whole run.
+   - **nobody there** (a background run) → way 3 for each persona that shows `TYPED`. A persona
+     with no usable way — no `TYPED`, or the browser tool refuses to type into the password field
+     — has its browser items `NOT RUN — no unattended login for <persona>`. A background run never
+     logs out an account it didn't sign in itself: a first login that would log out someone else
+     is `NOT RUN — signed in as someone else`, unless the user approved that logout before the run.
+     The rest of the run continues.
+
+A persona that signs in through single sign-on, OAuth, or a second factor has no password to
+type, `TYPED` or not: way 1 or 2 only (see "Single sign-on, OAuth, and second factors" above).
+
+State the way chosen on the header block's `Account` line.
+
+### The second persona acts through the API
+
+A browser holds one identity per site — its tabs share cookies — so every browser switch is a
+logout and a login. Most cross-persona items don't need one:
+
+- **TAMPER** → the browser stays as A. B creates the resource through API mode, and A tries to
+  reach it from the browser.
+- **AUTHZ** → both callers through API mode (see `api-mode.md`).
+- **ENTITLEMENT** → what the gated persona *sees* is the test, so the browser must be that
+  persona: a switch.
+
+Over direct HTTP the secret goes from the file to `curl` through stdin and never reaches you (see
+"Secret hygiene in flight" in `api-mode.md`), so this route needs no permission. The persona needs
+`API` for a token, or `UI` for a session-backed login over HTTP.
+
 ## The frozen-entitlements trap
 
 Some products snapshot a resource's configuration — plan, feature set, permissions — at the
@@ -204,8 +274,15 @@ it. If you're not sure whether the pattern applies, say so and test both ways if
 
 ## Switching mid-run
 
-Allowed, but announce it in the output and tag every subsequent finding with the persona it was
-found under. A run that doesn't say which account produced a finding is not reproducible.
+Every browser switch is three steps:
+
+1. **Log out** through the app's own control, not by clearing cookies.
+2. **Log in** as the next persona, the way chosen at workflow step 2.
+3. **Prove who is signed in now** — steps 1 and 3 of "Logging in, and proving it took". A login
+   that silently failed runs B's items as A, and every result after it is false.
+
+Announce each switch in the output, and tag every finding with the persona it was found under. A
+run that doesn't say which account produced a finding is not reproducible.
 
 ## What is not in the credentials file, and cannot be
 
