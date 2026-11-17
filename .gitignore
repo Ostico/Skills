@@ -1,2 +1,7 @@
 .*
 !.git*
+__pycache__/
+# Run logs of local-test-writer and local-code-writer: they name the projects the runs were
+# measured on, so they stay local.
+local-*/references/findings.local.md
+local-*/references/findings.md
